@@ -134,43 +134,31 @@
     })();
   }
   function stopRecording(){if(recorder?.state==='recording'){recordingFinalizing=true;recorder.stop();$('recordBtn').textContent='Preparando audio…';}}
-  // Combina versiones sucesivas de una frase sin repetir el texto solapado.
-  // Algunos motores de Android entregan una versión ampliada como otro resultado.
-  function combineSpeechParts(parts){
-    const words=[];
-    const normalise=word=>word.toLocaleLowerCase('es-ES').replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu,'');
-    for(const piece of parts){
-      const tokens=(piece||'').trim().split(/\s+/u).filter(Boolean);
-      if(!tokens.length)continue;
-      let overlap=0;
-      for(let size=Math.min(words.length,tokens.length);size>0;size--){
-        if(words.slice(-size).every((word,i)=>normalise(word)===normalise(tokens[i]))){overlap=size;break;}
-      }
-      words.push(...tokens.slice(overlap));
-    }
-    return words.join(' ');
+  // El reconocimiento de Chrome Android puede enviar muchas hipótesis provisionales
+  // de la misma frase. No deben copiarse al campo ni concatenarse entre sí.
+  function withSpeechBase(base,transcript){
+    return [base.trimEnd(),transcript.trim()].filter(Boolean).join(' ');
   }
-  function withSpeechBase(base,transcript){return [base.trimEnd(),transcript.trim()].filter(Boolean).join(' ');}
   function finishSpeech(r){
-    if(recognition!==r)return; // Ignorar eventos tardíos de sesiones anteriores.
+    if(recognition!==r)return;
     const state=speechState;
-    if(state&&draft===state.target){
-      // Mantener el último resultado si Chrome finaliza sin emitir una versión definitiva.
-      $('descriptionInput').value=withSpeechBase(state.base,state.preview||state.final);
+    if(state&&draft===state.target&&state.final){
+      $('descriptionInput').value=withSpeechBase(state.base,state.final);
     }
     recognition=null;speechState=null;
     $('dictateBtn').disabled=false;
     $('dictateBtn').textContent='🎤 Dictar texto';
-    if(!$('dictationStatus').textContent.startsWith('No se ha podido')){
-      $('dictationStatus').textContent=state?.preview?'Dictado terminado. Revisa el texto antes de guardarlo.':'Dictado terminado sin reconocer texto.';
+    if(!state?.error){
+      $('dictationStatus').textContent=state?.final?
+        'Dictado finalizado (v1.2). Puedes corregir o añadir otra frase.':
+        'No se ha reconocido ningún texto. Prueba de nuevo.';
     }
   }
-  // Salida inmediata al guardar, cambiar de registro o editar a mano.
   function haltSpeech(preserveInput=false){
     if(recognition){
-      const old=recognition, state=speechState;
-      if(!preserveInput&&state&&draft===state.target){
-        $('descriptionInput').value=withSpeechBase(state.base,state.preview||state.final);
+      const old=recognition,state=speechState;
+      if(!preserveInput&&state&&draft===state.target&&state.final){
+        $('descriptionInput').value=withSpeechBase(state.base,state.final);
       }
       recognition=null;speechState=null;
       try{old.abort();}catch{}
@@ -179,54 +167,74 @@
     $('dictateBtn').textContent='🎤 Dictar texto';
   }
   function dictate(){
-    if(recorder?.state==='recording'||recordingStarting||recordingFinalizing){toast('Termina primero la grabación de audio');return;}
+    if(!draft)return;
+    if(recorder?.state==='recording'||recordingStarting||recordingFinalizing){
+      toast('Termina primero la grabación de audio');return;
+    }
     if(recognition){
-      // stop() permite recibir el último resultado confirmado antes de onend.
       const r=recognition;
       if(speechState?.stopping)return;
       speechState.stopping=true;
       $('dictateBtn').disabled=true;
-      $('dictationStatus').textContent='Terminando dictado…';
+      $('dictationStatus').textContent='Terminando… esperando el resultado definitivo.';
       try{
         r.stop();
-        // Recuperarse si Chrome no envía onend tras pulsar Terminar.
-        setTimeout(()=>{if(recognition===r)finishSpeech(r);},3000);
+        setTimeout(()=>{if(recognition===r)finishSpeech(r);},3500);
       }catch{finishSpeech(r);}
       return;
     }
     const Speech=window.SpeechRecognition||window.webkitSpeechRecognition;
-    if(!Speech){toast('Usa el micrófono del teclado para dictar el texto');$('dictationStatus').textContent='Este navegador no ofrece dictado web. Pulsa el campo de descripción y usa el micrófono del teclado.';return;}
+    if(!Speech){
+      toast('Usa el micrófono del teclado para dictar el texto');
+      $('dictationStatus').textContent='Este navegador no ofrece dictado web. Pulsa el campo de descripción y usa el micrófono del teclado.';
+      return;
+    }
     const r=new Speech();
     recognition=r;
-    // En Chrome de Android el modo continuo puede entregar varias veces una frase.
-    // Una intervención por pulsación, con texto provisional que reemplaza al anterior.
-    r.lang='es-ES';r.continuous=false;r.interimResults=true;
-    speechState={target:draft,base:$('descriptionInput').value,final:'',preview:'',stopping:false};
+    r.lang='es-ES';
+    r.continuous=false;
+    r.interimResults=false;
+    r.maxAlternatives=1;
+    speechState={target:draft,base:$('descriptionInput').value,final:'',error:null,stopping:false};
     r.onresult=event=>{
       if(recognition!==r||!speechState||draft!==speechState.target)return;
-      const finalParts=[],pendingParts=[];
-      for(let i=0;i<event.results.length;i++){
-        const result=event.results[i];
-        if(!result?.[0]?.transcript)continue;
-        (result.isFinal?finalParts:pendingParts).push(result[0].transcript);
+      // Una única frase definitiva. Si Android remite revisiones acumulativas,
+      // reemplazamos el resultado anterior: nunca concatenamos hipótesis.
+      let best='';
+      for(let n=0;n<event.results.length;n++){
+        const item=event.results[n];
+        if(!item?.isFinal)continue;
+        const text=(item[0]?.transcript||'').trim();
+        if(text.length>best.length)best=text;
       }
-      speechState.final=combineSpeechParts(finalParts);
-      speechState.preview=combineSpeechParts([...finalParts,...pendingParts]);
-      $('descriptionInput').value=withSpeechBase(speechState.base,speechState.preview);
-      $('dictationStatus').textContent=pendingParts.length?'Escuchando…':'Texto reconocido. Puedes corregirlo.';
+      if(!best)return;
+      speechState.final=best;
+      $('descriptionInput').value=withSpeechBase(speechState.base,best);
+      $('dictationStatus').textContent='Texto reconocido. Revisa la transcripción.';
     };
     r.onerror=e=>{
-      if(recognition!==r)return;
-      $('dictationStatus').textContent=`No se ha podido dictar (${e.error}). Prueba el micrófono del teclado.`;
+      if(recognition!==r||!speechState)return;
+      speechState.error=e.error||'error';
+      $('dictationStatus').textContent=e.error==='no-speech'?
+        'No se ha detectado voz. Vuelve a intentarlo.':
+        'No se ha podido dictar ('+speechState.error+'). Prueba el micrófono del teclado.';
     };
     r.onend=()=>finishSpeech(r);
-    try{r.start();$('dictateBtn').textContent='■ Terminar dictado';$('dictationStatus').textContent='Escuchando… habla con normalidad.';}
-    catch(e){finishSpeech(r);toast('No se ha podido iniciar el dictado',true);}
+    try{
+      r.start();
+      $('dictateBtn').textContent='■ Terminar dictado';
+      $('dictationStatus').textContent='Escuchando… el texto aparecerá al terminar (v1.2).';
+    }catch(e){
+      recognition=null;speechState=null;
+      $('dictateBtn').disabled=false;
+      $('dictateBtn').textContent='🎤 Dictar texto';
+      toast('No se ha podido iniciar el dictado',true);
+    }
   }
-    async function save(){
+  async function save(){
     if(!draft)return;
     if(recordingStarting||recordingFinalizing||recorder?.state==='recording'){toast('Termina la grabación antes de guardar',true);return;}
-    haltSpeech();
+    if(recognition){toast('Termina el dictado antes de guardar',true);return;}
     draft.zone=$('zoneInput').value.trim();draft.work=$('workInput').value.trim();draft.description=$('descriptionInput').value.trim();
     if(draft.type==='note'&&!draft.description&&!draft.audio){toast('Escribe, dicta o graba una nota antes de guardar',true);return;}
     draft.updatedAt=new Date().toISOString();
