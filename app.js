@@ -122,12 +122,58 @@
       updateGpsDisplay();
     },{enableHighAccuracy:true,maximumAge:15000,timeout:14000});
   }
+  function photoItems(record){
+    if(Array.isArray(record?.photos)&&record.photos.length)return record.photos;
+    if(record?.photo)return [{id:record.id+'-original',blob:record.photo,originalName:record.originalName||'foto.jpg',caption:''}];
+    return [];
+  }
   function setPhotoPreview(){
-    if(photoUrl){URL.revokeObjectURL(photoUrl);photoUrl=null;}
-    const visible=Boolean(draft?.photo);
-    $('photoArea').classList.toggle('hidden',!visible);
-    if(visible){photoUrl=URL.createObjectURL(draft.photo);$('photoPreview').src=photoUrl;$('photoFilename').textContent=draft.originalName||'Fotografía';}
-    else $('photoPreview').removeAttribute('src');
+    for(const url of previewURLs)URL.revokeObjectURL(url);
+    previewURLs=[];
+    const items=photoItems(draft), area=$('photoArea'),list=$('photosList');
+    area.classList.toggle('hidden',!items.length);
+    list.replaceChildren();
+    $('photoCount').textContent=items.length+' foto(s)';
+    for(const [index,item] of items.entries()){
+      const container=document.createElement('div');container.className='photo-item';
+      const pic=document.createElement('img');
+      if(item.blob){
+        const url=URL.createObjectURL(item.blob);previewURLs.push(url);pic.src=url;
+      }
+      pic.alt='Fotografía '+(index+1);
+      const line=document.createElement('div');line.className='photo-item-heading';
+      const label=document.createElement('strong');label.textContent='Foto '+(index+1);
+      const rm=document.createElement('button');rm.type='button';
+      rm.className='button button-small button-danger';rm.textContent='Quitar';
+      rm.addEventListener('click',()=>{
+        if(!draft)return;
+        if(!Array.isArray(draft.photos))draft.photos=photoItems(draft);
+        draft.photos.splice(index,1);draft.photo=null;
+        setPhotoPreview();scheduleDraftSave();
+      });
+      line.append(label,rm);
+      const description=document.createElement('textarea');
+      description.rows=2;description.maxLength=1200;
+      description.placeholder='Descripción individual de esta foto (opcional)';
+      description.setAttribute('aria-label','Descripción foto '+(index+1));
+      description.value=item.caption||'';
+      description.addEventListener('input',()=>{item.caption=description.value;scheduleDraftSave();});
+      const filename=document.createElement('div');filename.className='filename';
+      filename.textContent=item.originalName||'Imagen';
+      container.append(pic,line,description,filename);list.append(container);
+    }
+  }
+  function appendPhotos(files){
+    if(!draft)return;
+    const selected=Array.from(files).filter(file=>file.type.startsWith('image/'));
+    if(!selected.length){toast('No se han seleccionado fotografías válidas',true);return;}
+    if(!Array.isArray(draft.photos))draft.photos=photoItems(draft);
+    for(const file of selected){
+      draft.photos.push({id:freshId(),blob:file,originalName:file.name,caption:''});
+    }
+    draft.photo=null;draft.originalName=draft.photos[0]?.originalName||'';
+    if(draft.type==='note')draft.type='photo';
+    setPhotoPreview();scheduleDraftSave();
   }
   function setAudioPreview(){
     if(audioUrl){URL.revokeObjectURL(audioUrl);audioUrl=null;}
@@ -304,9 +350,10 @@
 
   function newDraft(type,file){
     return {id:freshId(),type,projectId:activeProjectId,project:currentProject().name,technician:profile.name,
-      technicianRole:profile.role,technicianEmail:profile.email,
+      technicianRole:profile.role,technicianEmail:profile.email,visitId:activeVisits[activeProjectId]||null,
       createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),zone:'',work:'',zones:[],works:[],description:'',
-      photo:file||null,originalName:file?.name||'',audio:null,audioMime:'',latitude:null,longitude:null,accuracy:null,gpsCapturedAt:null,gpsMessage:'Sin ubicación todavía'};
+      photos:file?[{id:freshId(),blob:file,originalName:file.name,caption:''}]:[],
+      photo:null,originalName:file?.name||'',audio:null,audioMime:'',latitude:null,longitude:null,accuracy:null,gpsCapturedAt:null,gpsMessage:'Sin ubicación todavía'};
   }
   function loadEditor(record,isEdit=false,autoGPS=true){
     haltSpeech();if(recorder?.state==='recording'){stopRecording();}
@@ -324,10 +371,11 @@
   function addPhotos(files,isCamera){
     const accepted=Array.from(files).filter(file=>file.type.startsWith('image/'));
     if(!accepted.length){toast('No se han seleccionado imágenes válidas',true);return;}
-    photoQueue=accepted.slice(1);
-    const d=newDraft('photo',accepted[0]);
-    // La posición del móvil no es necesariamente la de una fotografía antigua importada.
-    if(!isCamera)d.gpsMessage='Imagen importada: pulsa «Obtener ubicación» solo si estás en el lugar de la foto.';
+    photoQueue=[];
+    const d=newDraft('photo');
+    d.photos=accepted.map(file=>({id:freshId(),blob:file,originalName:file.name,caption:''}));
+    d.originalName=accepted[0].name;
+    if(!isCamera)d.gpsMessage='Fotografías importadas: consulta el GPS solo si estás en el lugar de la foto.';
     loadEditor(d,false,isCamera);
   }
   function abortDraft(){
@@ -469,6 +517,7 @@
     if(recognition){toast('Termina el dictado antes de guardar',true);return;}
     syncPickerToDraft('zone');syncPickerToDraft('work');draft.description=$('descriptionInput').value.trim();
     if(draft.type==='note'&&!draft.description&&!draft.audio){toast('Escribe, dicta o graba una nota antes de guardar',true);return;}
+    if(draft.type==='photo'&&!photoItems(draft).length){toast('Añade alguna fotografía antes de guardar',true);return;}
     draft.updatedAt=new Date().toISOString();
     $('saveRecord').disabled=true;
     try{
@@ -502,13 +551,14 @@
       for(const row of visible){
         const b=document.createElement('button');b.type='button';b.className='record-card';b.setAttribute('aria-label',`Abrir ${row.type==='photo'?'foto':'nota'} de ${hours(row.createdAt)}`);
         let preview;
-        if(row.photo){preview=document.createElement('img');preview.className='thumbnail';const url=URL.createObjectURL(row.photo);listUrls.push(url);preview.src=url;preview.alt='Miniatura';preview.loading='lazy';}
+        const photos=photoItems(row);
+        if(photos.length){preview=document.createElement('img');preview.className='thumbnail';const url=URL.createObjectURL(photos[0].blob);listUrls.push(url);preview.src=url;preview.alt='Miniatura';preview.loading='lazy';}
         else{preview=document.createElement('div');preview.className='thumbnail thumb-note';preview.textContent='🎙';}
         const body=document.createElement('div');body.className='record-body';
         const meta=document.createElement('div');meta.className='record-meta';meta.textContent=`${localDay(row.createdAt).split('-').reverse().join('/')} · ${hours(row.createdAt)} · ${row.technician||'Sin autor'}`;
         const zone=document.createElement('div');zone.className='record-zone';zone.textContent=row.zone||row.work||(row.type==='photo'?'Fotografía':'Nota de obra');
         const description=document.createElement('div');description.className='record-desc';description.textContent=row.description||(row.work?'Trabajo: '+row.work:'Sin descripción');
-        const tags=document.createElement('div');tags.className='record-tags';tags.textContent=[row.type==='photo'?'📷 Foto':'🗒 Nota',row.audio?'🎙 Audio':'',row.latitude!=null?'⌖ GPS':''].filter(Boolean).join(' · ');
+        const tags=document.createElement('div');tags.className='record-tags';tags.textContent=[photos.length?'📷 '+photos.length+' foto(s)':'🗒 Nota',row.audio?'🎙 Audio':'',row.latitude!=null?'⌖ GPS':'',row.visitId?'Visita':''].filter(Boolean).join(' · ');
         body.append(meta,zone,description,tags);b.append(preview,body);
         b.addEventListener('click',()=>{photoQueue=[];loadEditor({...row,gpsMessage:''},true,false);});
         list.append(b);
@@ -589,6 +639,8 @@
   $('newNote').addEventListener('click',createNote);
   $('cameraInput').addEventListener('change',e=>{if(e.target.files?.length)addPhotos(e.target.files,true);e.target.value='';});
   $('galleryInput').addEventListener('change',e=>{if(e.target.files?.length)addPhotos(e.target.files,false);e.target.value='';});
+  $('addMorePhotos').addEventListener('click',()=>$('photoMoreInput').click());
+  $('photoMoreInput').addEventListener('change',e=>{if(e.target.files?.length)appendPhotos(e.target.files);e.target.value='';});
   $('cancelEditor').addEventListener('click',abortDraft);
   $('retryGps').addEventListener('click',acquireGPS);
   $('recordBtn').addEventListener('click',()=>recorder?.state==='recording'?stopRecording():startRecording());
