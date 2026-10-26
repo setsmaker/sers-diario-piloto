@@ -104,7 +104,8 @@
     draftWrites=draftWrites.catch(()=>{}).then(()=>SersDB.saveDraft({
       data:snapshot,savedAt:new Date().toISOString()
     }));
-    draftWrites.catch(error=>console.error('No se pudo guardar el borrador',error));
+    draftWrites.then(()=>{if(currentView==='home')checkForDraft();})
+      .catch(error=>console.error('No se pudo guardar el borrador',error));
     return draftWrites;
   }
   async function clearSavedDraft(){
@@ -763,6 +764,8 @@
   $('galleryInput').addEventListener('change',e=>{if(e.target.files?.length)addPhotos(e.target.files,false);e.target.value='';});
   $('addMorePhotos').addEventListener('click',()=>$('photoMoreInput').click());
   $('photoMoreInput').addEventListener('change',e=>{if(e.target.files?.length)appendPhotos(e.target.files);e.target.value='';});
+  $('captureMorePhoto').addEventListener('click',()=>$('cameraMoreInput').click());
+  $('cameraMoreInput').addEventListener('change',e=>{if(e.target.files?.length)appendPhotos(e.target.files);e.target.value='';});
   $('cancelEditor').addEventListener('click',abortDraft);
   $('retryGps').addEventListener('click',acquireGPS);
   $('recordBtn').addEventListener('click',()=>recorder?.state==='recording'?stopRecording():startRecording());
