@@ -14,7 +14,12 @@
   function loadProjects(){
     try{
       const value=JSON.parse(localStorage.getItem(projectsKey)||'null');
-      if(Array.isArray(value)&&value.length)return value.filter(p=>p&&typeof p.name==='string'&&p.id);
+      if(Array.isArray(value)){
+        const valid=value.filter(p=>p&&typeof p.name==='string'&&p.id).map(p=>({
+          ...p,zones:Array.isArray(p.zones)?p.zones:[],works:Array.isArray(p.works)?p.works:[]
+        }));
+        if(valid.length)return valid;
+      }
     }catch{}
     return [projectTemplate()];
   }
