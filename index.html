@@ -26,9 +26,24 @@
           <p>Fotografías, notas y ubicación. Todo queda guardado en este móvil hasta que lo exportes.</p>
         </div>
         <div class="project-panel">
-          <span class="small-label">OBRA ACTIVA</span>
+          <span class="small-label">OBRA ACTIVA · CATÁLOGO COMPARTIDO</span>
           <select id="homeProject" class="project-chooser" aria-label="Seleccionar obra activa"></select>
           <span id="homeTechnician" class="muted">Técnico: sin configurar</span>
+        </div>
+
+        <div class="visit-panel">
+          <div><strong>Visita de obra (opcional)</strong><p id="visitStatus" class="hint">Puedes registrar fotos y notas sin iniciar una visita.</p></div>
+          <div class="inline-controls">
+            <button id="startVisit" type="button" class="button button-outline">▶ Iniciar visita</button>
+            <button id="endVisit" type="button" class="button button-outline hidden">■ Finalizar visita</button>
+          </div>
+        </div>
+        <div id="draftRecovery" class="visit-panel recovery-panel hidden">
+          <strong>Tienes un borrador sin guardar</strong>
+          <div class="inline-controls">
+            <button id="recoverDraft" type="button" class="button button-primary">Recuperarlo</button>
+            <button id="discardDraft" type="button" class="button button-outline">Descartar</button>
+          </div>
         </div>
         <div class="actions">
           <button id="takePhoto" class="action action-primary" type="button"><span class="action-icon">📷</span><span>Hacer foto<small>Abrir cámara del móvil</small></span></button>
@@ -36,7 +51,7 @@
           <button id="newNote" class="action" type="button"><span class="action-icon">🎙</span><span>Nueva nota<small>Dictada, escrita o grabada</small></span></button>
         </div>
         <div class="info-line"><strong id="homeCount">0 registros</strong><span id="homeLast">Sin capturas todavía</span></div>
-        <p class="privacy-note">Sin cuentas ni pagos. Los datos aún <strong>no se envían al servidor de SERS</strong>.</p>
+        <p class="privacy-note">Fotos, audios y notas permanecen en este móvil. Solo el catálogo de obras se consulta en GitHub. Exporta copias de seguridad con frecuencia.</p>
       </section>
 
       <section id="view-records" class="view hidden" aria-label="Registros guardados">
@@ -47,12 +62,13 @@
           <button id="showAll" type="button" class="button button-small button-outline">Ver todos</button>
           <button id="showToday" type="button" class="button button-small button-outline hidden">Hoy</button>
         </div>
+        <div class="filters visit-filter"><label for="visitFilter">Visita</label><select id="visitFilter" aria-label="Filtrar por visita"><option value="all">Todas las visitas y registros sueltos</option></select></div>
         <div id="recordsSummary" class="muted record-total"></div>
         <div id="recordsList" class="record-list" aria-live="polite"></div>
       </section>
 
       <section id="view-settings" class="view hidden" aria-label="Ajustes y exportación">
-        <div class="section-heading"><p class="kicker">CONFIGURACIÓN</p><h1>Obra y técnico</h1></div>
+        <div class="section-heading"><p class="kicker">CONFIGURACIÓN</p><h1>Mi perfil y obras</h1></div>
         <div class="sheet">
           <h2>Mi perfil</h2>
           <label for="technicianInput">Nombre y apellidos del técnico</label>
@@ -63,29 +79,16 @@
           <input id="technicianEmailInput" type="email" maxlength="150" autocomplete="email" placeholder="correo@empresa.com">
           <button id="saveProfile" type="button" class="button button-primary full">Guardar perfil</button>
         </div>
+
         <div class="sheet">
-          <h2>Mis obras</h2>
+          <h2>Obras disponibles</h2>
+          <p class="hint">El catálogo se descarga desde GitHub y se conserva en el móvil para trabajar sin cobertura. Lo administra SERS; los inspectores pueden consultarlo, no modificarlo.</p>
           <label for="settingsProjectSelect">Obra activa</label>
           <select id="settingsProjectSelect"></select>
-          <label for="projectInput">Nombre de la obra</label>
-          <input id="projectInput" type="text" maxlength="120" placeholder="Nombre de la obra">
-          <label for="projectCodeInput">Código / expediente (opcional)</label>
-          <input id="projectCodeInput" type="text" maxlength="80">
-          <label for="projectPromoterInput">Promotor (opcional)</label>
-          <input id="projectPromoterInput" type="text" maxlength="120">
-          <label for="projectContractorInput">Contratista (opcional)</label>
-          <input id="projectContractorInput" type="text" maxlength="120">
-          <label for="zoneOptionsInput">Zonas de la obra</label>
-          <textarea id="zoneOptionsInput" rows="5" placeholder="Una zona por línea. Por ejemplo:&#10;Anselmo Clavé&#10;Parque Central"></textarea>
-          <label for="workOptionsInput">Unidades o trabajos</label>
-          <textarea id="workOptionsInput" rows="5" placeholder="Una unidad por línea. Por ejemplo:&#10;Saneamiento&#10;Pavimentación"></textarea>
-          <p class="hint">Introduce una opción por línea. Después podrás marcar varias zonas y varios trabajos en cada registro.</p>
-          <button id="saveSettings" type="button" class="button button-primary full">Guardar configuración de obra</button>
-          <div class="add-project">
-            <label for="newProjectInput">Crear otra obra</label>
-            <input id="newProjectInput" type="text" maxlength="120" placeholder="Nombre de la nueva obra">
-            <button id="addProject" type="button" class="button button-outline full">+ Crear y seleccionar obra</button>
-          </div>
+          <p id="catalogStatus" class="status-small"></p>
+          <button id="refreshCatalog" type="button" class="button button-outline full">↻ Actualizar catálogo</button>
+          <div id="projectDetail" class="project-detail"></div>
+          <p class="hint">Para añadir o cambiar una obra, comunícalo al administrador. No introduzcas datos reservados en el catálogo público de GitHub.</p>
         </div>
         <div class="sheet">
           <h2>Exportar al ordenador</h2>
@@ -96,7 +99,7 @@
         </div>
         <div class="sheet discreet">
           <h2>Información y almacenamiento</h2>
-          <p>Los registros se almacenan en este navegador, en este dispositivo. No se sincronizan entre móviles. Exporta copias periódicamente: borrar los datos del navegador puede hacer que se pierdan.</p>
+          <p>Fotografías, notas, visitas y borradores se guardan en este dispositivo, no se sincronizan entre móviles. El catálogo común de obras se consulta desde GitHub. Exporta copias periódicamente: borrar los datos del navegador puede hacer que se pierdan.</p>
           <p>La transcripción utiliza el reconocimiento de voz del navegador cuando está disponible. Puede necesitar Internet. Si no aparece, utiliza el micrófono del teclado.</p>
         </div>
       </section>
@@ -105,7 +108,11 @@
         <div class="editor-top"><button id="cancelEditor" type="button" class="button button-outline">‹ Volver</button><span id="queueInfo" class="queue-info"></span></div>
         <h1 id="editorTitle">Nueva fotografía</h1>
         <p class="editor-time" id="editorTime"></p>
-        <div id="photoArea" class="photo-area hidden"><img id="photoPreview" alt="Foto del registro"><p id="photoFilename" class="filename"></p></div>
+        <div id="photoArea" class="photo-area hidden">
+          <div class="photos-heading"><h2>Fotografías del registro</h2><span id="photoCount"></span></div>
+          <div id="photosList" class="photos-list"></div>
+          <button id="addMorePhotos" type="button" class="button button-outline full">+ Añadir fotografías</button>
+        </div>
         <div class="sheet editor-form">
 <label id="zoneLabel">Zonas de la obra <span class="optional">(puedes elegir varias)</span></label>
           <div class="multi-picker" id="zonePicker">
@@ -136,7 +143,8 @@
             </div>
           </div>
           <label for="descriptionInput">Descripción / nota</label>
-          <textarea id="descriptionInput" rows="5" placeholder="Cuenta lo que estás viendo. Puedes dictarlo usando el botón o el micrófono del teclado."></textarea>
+          <textarea id="descriptionInput" rows="5" placeholder="Descripción común a todas las fotos. Puedes dictarla o escribirla."></textarea>
+          <p class="hint">Se guarda el texto original. Cada fotografía puede tener además su propia descripción.</p>
           <div class="inline-controls">
             <button id="dictateBtn" type="button" class="button button-dark">🎤 Dictar texto</button>
             <span id="dictationHint" class="hint">También puedes usar el micrófono del teclado</span>
@@ -170,6 +178,7 @@
     </nav>
     <input id="cameraInput" class="visually-hidden" type="file" accept="image/*" capture="environment">
     <input id="galleryInput" class="visually-hidden" type="file" accept="image/*" multiple>
+    <input id="photoMoreInput" class="visually-hidden" type="file" accept="image/*" multiple>
     <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
   </div>
   <script src="./db.js" defer></script>
