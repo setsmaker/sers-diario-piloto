@@ -19,8 +19,9 @@
     zones:[],works:[]
   });
   function convertPublicProject(item){
-    return {id:item.id,name:item.nombre,code:item.codigo||'',promoter:'',
-      contractor:'',zones:item.zonas||[],works:item.unidades||[],public:true};
+    return {id:item.id,name:item.nombre,code:item.codigo||'',
+      promoter:item.promotor||'',contractor:item.contratista||'',
+      zones:item.zonas||[],works:item.unidades||[],public:true};
   }
   function loadProjects(){
     try{
@@ -260,6 +261,7 @@
     }
     draft.photo=null;draft.originalName=draft.photos[0]?.originalName||'';
     if(draft.type==='note')draft.type='photo';
+    if(!editing)$('editorTitle').textContent='Nuevo registro · '+photoItems(draft).length+' foto(s)';
     setPhotoPreview();scheduleDraftSave();
   }
   function setAudioPreview(){
@@ -373,6 +375,8 @@
     holder.replaceChildren();
     const rows=[
       ['Obra',p.name],['Código',p.code||'—'],
+      ...(p.promoter?[['Promotor',p.promoter]]:[]),
+      ...(p.contractor?[['Contratista',p.contractor]]:[]),
       ['Zonas',(p.zones||[]).join(' · ')||'Sin definir'],
       ['Unidades',(p.works||[]).join(' · ')||'Sin definir']
     ];
@@ -450,7 +454,8 @@
     if(record.photo&&!Array.isArray(record.photos)){
       record.photos=photoItems(record); // Compatibilidad con fotos de versiones previas.
     }
-    $('editorTitle').textContent=isEdit?'Revisar registro':(record.type==='photo'?'Nueva fotografía':'Nueva nota');
+    $('editorTitle').textContent=isEdit?'Revisar registro':
+      (record.type==='photo'?'Nuevo registro · '+photoItems(record).length+' foto(s)':'Nueva nota');
     $('editorTime').textContent=`${niceDate(record.createdAt)} · ${record.technician||'Técnico sin indicar'}`;
     initPickers(record);$('descriptionInput').value=record.description||'';
     $('deleteRecord').classList.toggle('hidden',!isEdit);
@@ -666,7 +671,9 @@
         const body=document.createElement('div');body.className='record-body';
         const meta=document.createElement('div');meta.className='record-meta';meta.textContent=`${localDay(row.createdAt).split('-').reverse().join('/')} · ${hours(row.createdAt)} · ${row.technician||'Sin autor'}`;
         const zone=document.createElement('div');zone.className='record-zone';zone.textContent=row.zone||row.work||(row.type==='photo'?'Fotografía':'Nota de obra');
-        const description=document.createElement('div');description.className='record-desc';description.textContent=row.description||(row.work?'Trabajo: '+row.work:'Sin descripción');
+        const description=document.createElement('div');description.className='record-desc';
+        description.textContent=row.description||photos.find(x=>x.caption)?.caption||
+          (row.work?'Trabajo: '+row.work:'Sin descripción');
         const tags=document.createElement('div');tags.className='record-tags';tags.textContent=[photos.length?'📷 '+photos.length+' foto(s)':'🗒 Nota',row.audio?'🎙 Audio':'',row.latitude!=null?'⌖ GPS':'',row.visitId?'Visita':''].filter(Boolean).join(' · ');
         body.append(meta,zone,description,tags);b.append(preview,body);
         b.addEventListener('click',()=>{photoQueue=[];loadEditor({...row,gpsMessage:''},true,false);});
