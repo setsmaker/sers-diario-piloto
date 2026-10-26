@@ -19,3 +19,6 @@
 .multi-picker-empty{padding:12px;color:var(--muted);font-size:14px}
 .multi-add input{flex:1;min-width:150px}
 .masthead{background:#397558}
+
+/* Icono corporativo SERS en la cabecera */
+.symbol{background:#397558 url("./icons/icon-192.png?v=5") center/contain no-repeat;color:transparent;flex:none}
