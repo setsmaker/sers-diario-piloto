@@ -217,7 +217,7 @@
     };
     r.onerror=e=>{
       if(recognition!==r)return;
-      $('dictationStatus').textContent=\`No se ha podido dictar (\${e.error}). Prueba el micrófono del teclado.\`;
+      $('dictationStatus').textContent=`No se ha podido dictar (${e.error}). Prueba el micrófono del teclado.`;
     };
     r.onend=()=>finishSpeech(r);
     try{r.start();$('dictateBtn').textContent='■ Terminar dictado';$('dictationStatus').textContent='Escuchando… habla con normalidad.';}
