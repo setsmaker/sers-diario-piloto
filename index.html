@@ -111,7 +111,10 @@
         <div id="photoArea" class="photo-area hidden">
           <div class="photos-heading"><h2>Fotografías del registro</h2><span id="photoCount"></span></div>
           <div id="photosList" class="photos-list"></div>
-          <button id="addMorePhotos" type="button" class="button button-outline full">+ Añadir fotografías</button>
+          <div class="inline-controls">
+            <button id="addMorePhotos" type="button" class="button button-outline">+ Desde galería</button>
+            <button id="captureMorePhoto" type="button" class="button button-outline">📷 Hacer otra foto</button>
+          </div>
         </div>
         <div class="sheet editor-form">
 <label id="zoneLabel">Zonas de la obra <span class="optional">(puedes elegir varias)</span></label>
@@ -179,6 +182,7 @@
     <input id="cameraInput" class="visually-hidden" type="file" accept="image/*" capture="environment">
     <input id="galleryInput" class="visually-hidden" type="file" accept="image/*" multiple>
     <input id="photoMoreInput" class="visually-hidden" type="file" accept="image/*" multiple>
+    <input id="cameraMoreInput" class="visually-hidden" type="file" accept="image/*" capture="environment">
     <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
   </div>
   <script src="./db.js" defer></script>
