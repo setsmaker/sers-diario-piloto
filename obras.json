@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-10-26",
+  "notice": "Catálogo visible públicamente en GitHub Pages. Incluir solo datos autorizados y no confidenciales.",
+  "obras": [
+    {
+      "id": "portillo-e19",
+      "nombre": "Portillo · Urbanización E-19",
+      "codigo": "",
+      "zonas": [
+        "Anselmo Clavé",
+        "Escoriaza y Fabro",
+        "Parque Central"
+      ],
+      "unidades": [
+        "Pavimentación",
+        "Saneamiento",
+        "Alumbrado"
+      ],
+      "activa": true
+    }
+  ]
+}
