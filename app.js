@@ -446,6 +446,9 @@
   function loadEditor(record,isEdit=false,autoGPS=true){
     haltSpeech();if(recorder?.state==='recording'){stopRecording();}
     draft=record;editing=isEdit;
+    if(record.photo&&!Array.isArray(record.photos)){
+      record.photos=photoItems(record); // Compatibilidad con fotos de versiones previas.
+    }
     $('editorTitle').textContent=isEdit?'Revisar registro':(record.type==='photo'?'Nueva fotografía':'Nueva nota');
     $('editorTime').textContent=`${niceDate(record.createdAt)} · ${record.technician||'Técnico sin indicar'}`;
     initPickers(record);$('descriptionInput').value=record.description||'';
@@ -621,8 +624,7 @@
         localStorage.setItem(lastChoicesKey,JSON.stringify(lastChoices));
         await clearSavedDraft();
       }
-      if(!editing&&photoQueue.length){const next=photoQueue.shift();loadEditor(newDraft('photo',next),false,false);draft.gpsMessage='Foto importada: si necesitas el GPS, pulsa «Obtener ubicación».';updateGpsDisplay();toast('Foto guardada. Continúa con la siguiente.');}
-      else{photoQueue=[];draft=null;view('records');toast('Registro guardado en el móvil');}
+      photoQueue=[];draft=null;view('records');toast('Registro guardado en el móvil');
     }catch(error){toast('No se pudo guardar: comprueba el espacio libre del móvil',true);console.error(error);}
     finally{$('saveRecord').disabled=false;}
   }
@@ -694,27 +696,44 @@
       const rows=(await allRecords()).filter(r=>isRecordInProject(r,currentProject())&&(which==='all'||localDay(r.createdAt)===$('dayFilter').value));
       if(!rows.length){toast('No hay registros para exportar',true);return;}
       const zipFiles=[];const manifest=[];
-      const cols=['id','obra','tecnico','tipo','fecha_hora','zona','unidad_trabajo','descripcion','latitud','longitud','precision_m','foto','audio'];
+      const cols=['id','obra','tecnico','tipo','fecha_hora','zona','unidad_trabajo','zonas','unidades','descripcion','visita_id','latitud','longitud','precision_m','foto','fotos','audio'];
       for(const row of rows){
         const d=new Date(row.createdAt);
         const dateStamp=`${localDay(d)}_${String(d.getHours()).padStart(2,'0')}-${String(d.getMinutes()).padStart(2,'0')}-${String(d.getSeconds()).padStart(2,'0')}`;
         const coords=row.latitude!=null?`_${row.latitude.toFixed(5)}_${row.longitude.toFixed(5)}`:'';
         const shortId=row.id.replace(/[^a-zA-Z0-9]/g,'').slice(0,8);
         const stem=`${dateStamp}_${row.type}_${safeName(row.zone||row.work).slice(0,30)}${coords}_${shortId}`;
-        const photoFile=row.photo?`fotografias/${stem}.${extensionFromMime(row.photo,false)}`:'';
-        const audioFile=row.audio?`audios/${stem}.${extensionFromMime(row.audio,true)}`:'';
-        if(row.photo)zipFiles.push({name:photoFile,data:row.photo,date:row.createdAt});
+        const imageRefs=[];
+        for(const [index,photo] of photoItems(row).entries()){
+          if(!photo.blob)continue;
+          const suffix=String(index+1).padStart(2,'0');
+          const name='fotografias/'+stem+'_foto'+suffix+'.'+extensionFromMime(photo.blob,false);
+          imageRefs.push({archivo:name,nombre_original:photo.originalName||'',descripcion:photo.caption||''});
+          zipFiles.push({name,data:photo.blob,date:row.createdAt});
+        }
+        const photoFile=imageRefs[0]?.archivo||'';
+        const audioFile=row.audio?'audios/'+stem+'.'+extensionFromMime(row.audio,true):'';
         if(row.audio)zipFiles.push({name:audioFile,data:row.audio,date:row.createdAt});
-        manifest.push({id:row.id,obra:row.project,obra_id:row.projectId||null,tecnico:row.technician,tipo:row.type,
-          fecha_hora:row.createdAt,zona:row.zone,unidad_trabajo:row.work,
-          zonas:recordValues(row,'zone'),unidades:recordValues(row,'work'),descripcion:row.description,
+        manifest.push({
+          id:row.id,obra:row.project,obra_id:row.projectId||null,
+          tecnico:row.technician,tipo:row.type,fecha_hora:row.createdAt,
+          zona:row.zone,unidad_trabajo:row.work,
+          zonas:recordValues(row,'zone'),unidades:recordValues(row,'work'),
+          descripcion:row.description||'',visita_id:row.visitId||null,
           latitud:row.latitude,longitud:row.longitude,precision_m:row.accuracy,
-          gps_hora:row.gpsCapturedAt,foto:photoFile,audio:audioFile,nombre_foto_original:row.originalName||''});
+          gps_hora:row.gpsCapturedAt,foto:photoFile,fotos:imageRefs.map(x=>x.archivo).join(' | '),
+          fotografias:imageRefs,audio:audioFile,
+          nombre_foto_original:row.originalName||''
+        });
       }
-      const csv='\ufeff'+[cols.join(';'),...manifest.map(item=>cols.map(key=>csvCell(item[key])).join(';'))].join('\r\n');
-      zipFiles.push({name:'registros.json',data:JSON.stringify({version:2,generado:new Date().toISOString(),obra:currentProject(),tecnico:profile,registros:manifest},null,2)});
+      const csv='\ufeff'+[cols.join(';'),...manifest.map(item=>cols.map(key=>
+        csvCell(Array.isArray(item[key])?item[key].join(' | '):item[key])).join(';'))].join('\r\n');
+      const visits=(await SersDB.getVisits()).filter(v=>isRecordInProject(v,currentProject()));
+      zipFiles.push({name:'registros.json',data:JSON.stringify({version:3,generado:new Date().toISOString(),
+        obra:currentProject(),tecnico:profile,visitas:visits,registros:manifest},null,2)});
+      zipFiles.push({name:'visitas.json',data:JSON.stringify(visits,null,2)});
       zipFiles.push({name:'registros_excel.csv',data:csv});
-      zipFiles.push({name:'LEEME.txt',data:'SERS · Diario de obra\r\n\r\nregistros.json: datos estructurados para la futura automatización.\r\nregistros_excel.csv: resumen para Excel (separador ;).\r\nfotografias/: fotografías sin recomprimir.\r\naudios/: notas de voz originales.\r\n\r\nFecha/hora: momento en que se añadió el registro a la aplicación.\r\nGPS: ubicación del móvil en el momento de solicitarla; si la foto se importó de la galería, no implica necesariamente la ubicación donde se tomó.\r\nLas notas de la planificación y la meteorología se incorporarán en una fase posterior.\r\nLos originales siguen guardados en este teléfono hasta que los elimines o se borren los datos del navegador.\r\n'});
+      zipFiles.push({name:'LEEME.txt',data:'SERS · Diario de obra\r\n\r\nregistros.json: datos estructurados y descripción por fotografía.\r\nvisitas.json: visitas abiertas o cerradas.\r\nregistros_excel.csv: resumen para Excel (separador ;).\r\nfotografias/: fotografías originales, sin recomprimir.\r\naudios/: notas de voz originales.\r\n\r\nLa descripción original se conserva sin correcciones automáticas.\r\nLos registros y el audio están guardados en el móvil, no en GitHub.\r\n'});
       const zip=await SersZip.create(zipFiles);
       const dateInfo=which==='all'?'completo':$('dayFilter').value;
       const name=`SERS_${safeName(currentProject().name).slice(0,35)}_${dateInfo}_${localDay(new Date())}.zip`;
