@@ -5,7 +5,7 @@
   const DEFAULTS = { project: 'Portillo · Urbanización E-19', technician: '' };
   let settings = readSettings();
   let draft = null, photoQueue = [], editing = false, modeAll = false;
-  let recorder=null, audioChunks=[], mediaStream=null, recognition=null, recordingFinalizing=false, recordingStarting=false;
+  let recorder=null, audioChunks=[], mediaStream=null, recognition=null, speechState=null, recordingFinalizing=false, recordingStarting=false;
   let photoUrl=null, audioUrl=null, listUrls=[];
   let statusTimer;
   let currentView='home';
@@ -134,29 +134,96 @@
     })();
   }
   function stopRecording(){if(recorder?.state==='recording'){recordingFinalizing=true;recorder.stop();$('recordBtn').textContent='Preparando audio…';}}
-  function haltSpeech(){if(recognition){const old=recognition;recognition=null;try{old.stop();}catch{}}$('dictateBtn').textContent='🎤 Dictar texto';}
+  // Combina versiones sucesivas de una frase sin repetir el texto solapado.
+  // Algunos motores de Android entregan una versión ampliada como otro resultado.
+  function combineSpeechParts(parts){
+    const words=[];
+    const normalise=word=>word.toLocaleLowerCase('es-ES').replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu,'');
+    for(const piece of parts){
+      const tokens=(piece||'').trim().split(/\s+/u).filter(Boolean);
+      if(!tokens.length)continue;
+      let overlap=0;
+      for(let size=Math.min(words.length,tokens.length);size>0;size--){
+        if(words.slice(-size).every((word,i)=>normalise(word)===normalise(tokens[i]))){overlap=size;break;}
+      }
+      words.push(...tokens.slice(overlap));
+    }
+    return words.join(' ');
+  }
+  function withSpeechBase(base,transcript){return [base.trimEnd(),transcript.trim()].filter(Boolean).join(' ');}
+  function finishSpeech(r){
+    if(recognition!==r)return; // Ignorar eventos tardíos de sesiones anteriores.
+    const state=speechState;
+    if(state&&draft===state.target){
+      // Mantener el último resultado si Chrome finaliza sin emitir una versión definitiva.
+      $('descriptionInput').value=withSpeechBase(state.base,state.preview||state.final);
+    }
+    recognition=null;speechState=null;
+    $('dictateBtn').disabled=false;
+    $('dictateBtn').textContent='🎤 Dictar texto';
+    if(!$('dictationStatus').textContent.startsWith('No se ha podido')){
+      $('dictationStatus').textContent=state?.preview?'Dictado terminado. Revisa el texto antes de guardarlo.':'Dictado terminado sin reconocer texto.';
+    }
+  }
+  // Salida inmediata al guardar, cambiar de registro o editar a mano.
+  function haltSpeech(preserveInput=false){
+    if(recognition){
+      const old=recognition, state=speechState;
+      if(!preserveInput&&state&&draft===state.target){
+        $('descriptionInput').value=withSpeechBase(state.base,state.preview||state.final);
+      }
+      recognition=null;speechState=null;
+      try{old.abort();}catch{}
+    }
+    $('dictateBtn').disabled=false;
+    $('dictateBtn').textContent='🎤 Dictar texto';
+  }
   function dictate(){
-    if(recorder?.state==='recording'){toast('Termina primero la grabación de audio');return;}
-    if(recognition){haltSpeech();return;}
+    if(recorder?.state==='recording'||recordingStarting||recordingFinalizing){toast('Termina primero la grabación de audio');return;}
+    if(recognition){
+      // stop() permite recibir el último resultado confirmado antes de onend.
+      const r=recognition;
+      if(speechState?.stopping)return;
+      speechState.stopping=true;
+      $('dictateBtn').disabled=true;
+      $('dictationStatus').textContent='Terminando dictado…';
+      try{
+        r.stop();
+        // Recuperarse si Chrome no envía onend tras pulsar Terminar.
+        setTimeout(()=>{if(recognition===r)finishSpeech(r);},3000);
+      }catch{finishSpeech(r);}
+      return;
+    }
     const Speech=window.SpeechRecognition||window.webkitSpeechRecognition;
     if(!Speech){toast('Usa el micrófono del teclado para dictar el texto');$('dictationStatus').textContent='Este navegador no ofrece dictado web. Pulsa el campo de descripción y usa el micrófono del teclado.';return;}
-    const r=new Speech();recognition=r;r.lang='es-ES';r.continuous=true;r.interimResults=true;
-    const base=$('descriptionInput').value.trimEnd();
+    const r=new Speech();
+    recognition=r;
+    // En Chrome de Android el modo continuo puede entregar varias veces una frase.
+    // Una intervención por pulsación, con texto provisional que reemplaza al anterior.
+    r.lang='es-ES';r.continuous=false;r.interimResults=true;
+    speechState={target:draft,base:$('descriptionInput').value,final:'',preview:'',stopping:false};
     r.onresult=event=>{
-      let final='',temporary='';
+      if(recognition!==r||!speechState||draft!==speechState.target)return;
+      const finalParts=[],pendingParts=[];
       for(let i=0;i<event.results.length;i++){
-        const str=event.results[i][0].transcript;
-        if(event.results[i].isFinal)final+=str+' ';else temporary+=str;
+        const result=event.results[i];
+        if(!result?.[0]?.transcript)continue;
+        (result.isFinal?finalParts:pendingParts).push(result[0].transcript);
       }
-      $('descriptionInput').value=[base,final.trim(),temporary.trim()].filter(Boolean).join(' ');
-      $('dictationStatus').textContent=temporary?'Escuchando… revisa el texto antes de guardarlo':'Texto reconocido. Puedes corregirlo.';
+      speechState.final=combineSpeechParts(finalParts);
+      speechState.preview=combineSpeechParts([...finalParts,...pendingParts]);
+      $('descriptionInput').value=withSpeechBase(speechState.base,speechState.preview);
+      $('dictationStatus').textContent=pendingParts.length?'Escuchando…':'Texto reconocido. Puedes corregirlo.';
     };
-    r.onerror=e=>{ $('dictationStatus').textContent=`No se ha podido dictar (${e.error}). Prueba el micrófono del teclado.`; };
-    r.onend=()=>{if(recognition===r){recognition=null;$('dictateBtn').textContent='🎤 Dictar texto';}};
+    r.onerror=e=>{
+      if(recognition!==r)return;
+      $('dictationStatus').textContent=\`No se ha podido dictar (\${e.error}). Prueba el micrófono del teclado.\`;
+    };
+    r.onend=()=>finishSpeech(r);
     try{r.start();$('dictateBtn').textContent='■ Terminar dictado';$('dictationStatus').textContent='Escuchando… habla con normalidad.';}
-    catch(e){recognition=null;toast('No se ha podido iniciar el dictado',true);}
+    catch(e){finishSpeech(r);toast('No se ha podido iniciar el dictado',true);}
   }
-  async function save(){
+    async function save(){
     if(!draft)return;
     if(recordingStarting||recordingFinalizing||recorder?.state==='recording'){toast('Termina la grabación antes de guardar',true);return;}
     haltSpeech();
@@ -287,6 +354,10 @@
   $('recordBtn').addEventListener('click',()=>recorder?.state==='recording'?stopRecording():startRecording());
   $('removeAudio').addEventListener('click',()=>{if(!draft)return;draft.audio=null;draft.audioMime='';setAudioPreview();$('recordingStatus').textContent='Audio quitado de este registro.';});
   $('dictateBtn').addEventListener('click',dictate);
+  $('descriptionInput').addEventListener('input',()=>{
+    // Si el técnico modifica el texto, sus cambios tienen prioridad sobre el micrófono.
+    if(recognition){haltSpeech(true);$('dictationStatus').textContent='Dictado interrumpido para editar el texto.';}
+  });
   $('saveRecord').addEventListener('click',save);
   $('deleteRecord').addEventListener('click',del);
   $('saveSettings').addEventListener('click',saveSettings);
