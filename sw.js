@@ -1,5 +1,5 @@
 'use strict';
-const CACHE='sers-diario-v4-multiobra';
+const CACHE='sers-diario-v5-logotipo-sers';
 const SHELL=['./','./index.html','./styles.css','./db.js','./zip.js','./app.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png'];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()));
