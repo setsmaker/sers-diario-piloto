@@ -1,0 +1,15 @@
+{
+  "name":"SERS · Diario de obra",
+  "short_name":"SERS Diario",
+  "description":"Captura fotos, notas y ubicaciones de visitas de obra",
+  "lang":"es-ES",
+  "start_url":"./index.html",
+  "scope":"./",
+  "display":"standalone",
+  "background_color":"#f2f5f3",
+  "theme_color":"#112c3d",
+  "icons":[
+    {"src":"./icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"./icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  ]
+}

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#112c3d">
+  <meta name="description" content="Captura de fotos y notas de visitas de obra, sin conexión y sin cuotas.">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" sizes="192x192" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <link rel="stylesheet" href="./styles.css">
+  <title>SERS · Diario de obra</title>
+</head>
+<body>
+  <div id="app">
+    <header class="masthead">
+      <div class="brand"><span class="symbol" aria-hidden="true">S</span><div><div class="brand-first">SERS</div><div class="brand-sub">Diario de obra · piloto</div></div></div>
+      <span id="networkStatus" class="connection">Comprobando…</span>
+    </header>
+
+    <main>
+      <section id="view-home" class="view" aria-label="Inicio">
+        <div class="intro">
+          <p class="kicker">VISITA DE OBRA</p>
+          <h1>Captura lo que ves.</h1>
+          <p>Fotografías, notas y ubicación. Todo queda guardado en este móvil hasta que lo exportes.</p>
+        </div>
+        <div class="project-panel">
+          <span class="small-label">OBRA ACTIVA</span>
+          <strong id="homeProject">Portillo · Urbanización E-19</strong>
+          <span id="homeTechnician" class="muted">Técnico: sin configurar</span>
+        </div>
+        <div class="actions">
+          <button id="takePhoto" class="action action-primary" type="button"><span class="action-icon">📷</span><span>Hacer foto<small>Abrir cámara del móvil</small></span></button>
+          <button id="choosePhotos" class="action" type="button"><span class="action-icon">▧</span><span>Elegir fotos<small>De la galería, una o varias</small></span></button>
+          <button id="newNote" class="action" type="button"><span class="action-icon">🎙</span><span>Nueva nota<small>Dictada, escrita o grabada</small></span></button>
+        </div>
+        <div class="info-line"><strong id="homeCount">0 registros</strong><span id="homeLast">Sin capturas todavía</span></div>
+        <p class="privacy-note">Sin cuentas ni pagos. Los datos aún <strong>no se envían al servidor de SERS</strong>.</p>
+      </section>
+
+      <section id="view-records" class="view hidden" aria-label="Registros guardados">
+        <div class="section-heading"><p class="kicker">REGISTRO DE VISITAS</p><h1>Fotos y notas</h1><p>Abre cualquier registro para ampliar la foto, leer el texto o escucharlo.</p></div>
+        <div class="filters">
+          <label for="dayFilter">Día</label>
+          <input id="dayFilter" type="date">
+          <button id="showAll" type="button" class="button button-small button-outline">Ver todos</button>
+          <button id="showToday" type="button" class="button button-small button-outline hidden">Hoy</button>
+        </div>
+        <div id="recordsSummary" class="muted record-total"></div>
+        <div id="recordsList" class="record-list" aria-live="polite"></div>
+      </section>
+
+      <section id="view-settings" class="view hidden" aria-label="Ajustes y exportación">
+        <div class="section-heading"><p class="kicker">CONFIGURACIÓN</p><h1>Obra y técnico</h1></div>
+        <div class="sheet">
+          <label for="projectInput">Obra activa</label>
+          <input id="projectInput" type="text" maxlength="120" autocomplete="off" placeholder="Nombre de la obra">
+          <label for="technicianInput">Nombre del técnico</label>
+          <input id="technicianInput" type="text" maxlength="90" autocomplete="name" placeholder="Tu nombre">
+          <button id="saveSettings" type="button" class="button button-primary full">Guardar configuración</button>
+        </div>
+        <div class="sheet">
+          <h2>Exportar al ordenador</h2>
+          <p>Descarga un ZIP con fotografías originales, audios, descripciones, ubicaciones, fechas y un CSV para Excel.</p>
+          <button id="exportDay" type="button" class="button button-primary full">Exportar el día seleccionado</button>
+          <button id="exportAll" type="button" class="button button-outline full">Exportar todos los registros</button>
+          <p id="exportDateInfo" class="hint"></p>
+        </div>
+        <div class="sheet discreet">
+          <h2>Sobre este piloto</h2>
+          <p>Los registros se almacenan en este navegador, en este dispositivo. No se sincronizan entre móviles. Exporta copias periódicamente: borrar los datos del navegador puede hacer que se pierdan.</p>
+          <p>La transcripción utiliza el reconocimiento de voz del navegador cuando está disponible. Puede necesitar Internet. Si no aparece, utiliza el micrófono del teclado.</p>
+        </div>
+      </section>
+
+      <section id="view-editor" class="view hidden" aria-label="Editar registro">
+        <div class="editor-top"><button id="cancelEditor" type="button" class="button button-outline">‹ Volver</button><span id="queueInfo" class="queue-info"></span></div>
+        <h1 id="editorTitle">Nueva fotografía</h1>
+        <p class="editor-time" id="editorTime"></p>
+        <div id="photoArea" class="photo-area hidden"><img id="photoPreview" alt="Foto del registro"><p id="photoFilename" class="filename"></p></div>
+        <div class="sheet editor-form">
+          <label for="zoneInput">Zona de la obra <span class="optional">(opcional)</span></label>
+          <input id="zoneInput" type="text" maxlength="120" placeholder="Ej.: Anselmo Clavé, parque, andenes...">
+          <label for="workInput">Unidad o trabajo <span class="optional">(opcional)</span></label>
+          <input id="workInput" type="text" maxlength="140" placeholder="Ej.: bordillos, pavimentación...">
+          <label for="descriptionInput">Descripción / nota</label>
+          <textarea id="descriptionInput" rows="5" placeholder="Cuenta lo que estás viendo. Puedes dictarlo usando el botón o el micrófono del teclado."></textarea>
+          <div class="inline-controls">
+            <button id="dictateBtn" type="button" class="button button-dark">🎤 Dictar texto</button>
+            <span id="dictationHint" class="hint">También puedes usar el micrófono del teclado</span>
+          </div>
+          <div id="dictationStatus" class="status-small" aria-live="polite"></div>
+        </div>
+        <div class="sheet editor-form">
+          <h2>Nota de voz original <span class="optional">(opcional)</span></h2>
+          <p class="hint">Puedes grabar una explicación y conservar el audio. La grabación no se transcribe automáticamente en esta primera versión.</p>
+          <div class="inline-controls">
+            <button id="recordBtn" type="button" class="button button-outline">⏺ Grabar audio</button>
+            <button id="removeAudio" type="button" class="button button-danger hidden">Quitar audio</button>
+          </div>
+          <div id="recordingStatus" class="status-small" aria-live="polite"></div>
+          <audio id="audioPreview" controls class="audio-player hidden"></audio>
+        </div>
+        <div class="sheet editor-form">
+          <h2>Localización GPS</h2>
+          <div id="gpsStatus" class="gps-status">Sin ubicación todavía.</div>
+          <button id="retryGps" type="button" class="button button-outline">⌖ Obtener ubicación</button>
+          <p class="hint">Si no hay cobertura o no concedes permiso, puedes guardar el registro igualmente.</p>
+        </div>
+        <div class="editor-footer"><button id="saveRecord" type="button" class="button button-primary full">Guardar registro</button><button id="deleteRecord" type="button" class="button button-danger full hidden">Eliminar este registro</button></div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Navegación principal">
+      <button id="navHome" type="button" class="nav-btn selected"><span aria-hidden="true">⌂</span>Capturar</button>
+      <button id="navRecords" type="button" class="nav-btn"><span aria-hidden="true">▧</span>Registros</button>
+      <button id="navSettings" type="button" class="nav-btn"><span aria-hidden="true">⚙</span>Ajustes / ZIP</button>
+    </nav>
+    <input id="cameraInput" class="visually-hidden" type="file" accept="image/*" capture="environment">
+    <input id="galleryInput" class="visually-hidden" type="file" accept="image/*" multiple>
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+  </div>
+  <script src="./db.js" defer></script>
+  <script src="./zip.js" defer></script>
+  <script src="./app.js" defer></script>
+</body>
+</html>
