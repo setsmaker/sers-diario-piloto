@@ -202,7 +202,7 @@
     navigator.geolocation.getCurrentPosition(pos=>{
       if(draft!==target)return;
       target.latitude=pos.coords.latitude;target.longitude=pos.coords.longitude;target.accuracy=pos.coords.accuracy;
-      target.gpsCapturedAt=new Date(pos.timestamp).toISOString();target.gpsMessage='';updateGpsDisplay();
+      target.gpsCapturedAt=new Date(pos.timestamp).toISOString();target.gpsMessage='';updateGpsDisplay();scheduleDraftSave();
     },err=>{
       if(draft!==target)return;
       target.gpsMessage=err.code===1?'Ubicación denegada. Activa el permiso si la necesitas.':
