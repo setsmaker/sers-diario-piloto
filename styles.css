@@ -22,3 +22,24 @@
 
 /* Icono corporativo SERS en la cabecera */
 .symbol{background:#397558 url("./icons/icon-192.png?v=5") center/contain no-repeat;color:transparent;flex:none}
+
+/* SERS Diario - visitas, galerías y lectura del catálogo compartido */
+.visit-panel{border:1px solid #aecbbb;border-radius:12px;padding:16px;margin:13px 0 17px;background:#edf5ef;display:flex;flex-direction:column;gap:10px}
+.visit-panel strong{font-size:17px;color:#214b36}
+.visit-panel .hint{margin:4px 0 0}
+.recovery-panel{background:#fff9de;border-color:#e8d39a}
+.visit-filter{padding:5px 0 9px}
+.visit-filter select{border:2px solid #a6bcb0;border-radius:8px;min-height:46px;padding:9px 10px;background:#fff;flex:1;font-size:15px}
+.project-detail{border:1px solid #cadbd0;background:#f4f8f5;padding:12px 14px;border-radius:9px;word-break:break-word}
+.project-detail p{font-size:14px;margin:6px 0;line-height:1.45}
+.photo-area{padding:12px;background:#f4f8f5;border:1px solid #cadbd0;display:flex;flex-direction:column;gap:12px}
+.photos-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.photos-heading h2{font-size:17px;margin:0}
+.photos-heading span{font-size:13px;color:#50685a}
+.photos-list{display:flex;flex-direction:column;gap:12px}
+.photo-item{border:1px solid #c6d6c9;border-radius:10px;background:#fff;padding:10px;display:flex;flex-direction:column;gap:8px}
+.photo-item img{height:auto;max-height:38dvh;object-fit:contain;border-radius:7px;background:#ecf0ef}
+.photo-item-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.photo-item textarea{min-height:74px;width:100%;padding:10px;border:2px solid #a3b9ad;border-radius:8px;font-size:16px;line-height:1.4}
+.photo-item textarea:focus{outline:2px solid #80b996}
+.photo-item .filename{padding:0;font-size:12px}
