@@ -4,6 +4,55 @@
   const settingsKey = 'sers-diario-settings-v1';
   const DEFAULTS = { project: 'Portillo · Urbanización E-19', technician: '' };
   let settings = readSettings();
+  const projectsKey='sers-diario-projects-v2';
+  const activeProjectKey='sers-diario-active-project-v2';
+  const profileKey='sers-diario-profile-v2';
+  const projectTemplate=()=>({
+    id:freshId(),name:settings.project||DEFAULTS.project,code:'',promoter:'',contractor:'',
+    zones:[],works:[]
+  });
+  function loadProjects(){
+    try{
+      const value=JSON.parse(localStorage.getItem(projectsKey)||'null');
+      if(Array.isArray(value)&&value.length)return value.filter(p=>p&&typeof p.name==='string'&&p.id);
+    }catch{}
+    return [projectTemplate()];
+  }
+  function loadProfile(){
+    try{
+      const stored=JSON.parse(localStorage.getItem(profileKey)||'null');
+      if(stored&&typeof stored==='object')return {name:stored.name||'',role:stored.role||'',email:stored.email||''};
+    }catch{}
+    return {name:settings.technician||'',role:'',email:''};
+  }
+  let projects=loadProjects();
+  let profile=loadProfile();
+  let activeProjectId=localStorage.getItem(activeProjectKey)||projects[0].id;
+  if(!projects.some(p=>p.id===activeProjectId))activeProjectId=projects[0].id;
+  function currentProject(){return projects.find(p=>p.id===activeProjectId)||projects[0];}
+  function projectForRecord(record){
+    return projects.find(p=>p.id===record.projectId)||projects.find(p=>p.name===record.project)||currentProject();
+  }
+  function isRecordInProject(record,project){
+    return record.projectId?record.projectId===project.id:record.project===project.name;
+  }
+  function saveProjects(){
+    localStorage.setItem(projectsKey,JSON.stringify(projects));
+    localStorage.setItem(activeProjectKey,activeProjectId);
+  }
+  function selectProject(id){
+    if(!projects.some(p=>p.id===id))return;
+    activeProjectId=id;
+    saveProjects();
+    renderProjectChoices();
+    fillProjectForm();
+    refreshHome();
+    if(currentView==='records')refreshRecords();
+  }
+  // Conserva el nombre del técnico y obra del formato antiguo como valores iniciales.
+  settings.project=currentProject().name;
+  settings.technician=profile.name;
+  let pickerSelection={zone:[],work:[]};
   let draft = null, photoQueue = [], editing = false, modeAll = false;
   let recorder=null, audioChunks=[], mediaStream=null, recognition=null, speechState=null, recordingFinalizing=false, recordingStarting=false;
   let photoUrl=null, audioUrl=null, listUrls=[];
@@ -71,9 +120,137 @@
     else{$('audioPreview').pause();$('audioPreview').removeAttribute('src');$('audioPreview').load();}
   }
   function freshId(){return (typeof crypto!=='undefined' && crypto.randomUUID)?crypto.randomUUID():`${Date.now()}-${Math.random().toString(36).slice(2)}`;}
+
+  function cleanOptions(items){
+    const used=new Set();
+    return items.map(x=>String(x||'').trim()).filter(x=>{
+      if(!x)return false;
+      const key=x.toLocaleLowerCase('es');
+      if(used.has(key))return false;
+      used.add(key);
+      return true;
+    });
+  }
+  function readOptions(text){return cleanOptions(text.split(/\r?\n/));}
+  function pickerField(type){return type==='zone'?'zones':'works';}
+  function recordValues(record,type){
+    const key=pickerField(type);
+    return Array.isArray(record[key])?cleanOptions(record[key]):cleanOptions(record[type]?[record[type]]:[]);
+  }
+  function syncPickerToDraft(type){
+    if(!draft)return;
+    const key=pickerField(type);
+    draft[key]=[...pickerSelection[type]];
+    draft[type]=pickerSelection[type].join(' | ');
+  }
+  function updatePickerSummary(type){
+    const values=pickerSelection[type];
+    const label=type==='zone'?'zonas':'trabajos';
+    $(type+'Toggle').firstChild.textContent=values.length?values.length+' '+(type==='zone'?'zona(s)':'unidad(es)')+' seleccionada(s) ':'Seleccionar '+label+' ';
+    const holder=$(type+'Selected');
+    holder.replaceChildren();
+    for(const value of values){
+      const chip=document.createElement('span');
+      chip.className='multi-chip';chip.textContent=value;holder.append(chip);
+    }
+  }
+  function renderPicker(type){
+    if(!draft)return;
+    const query=$(type+'Search').value.trim().toLocaleLowerCase('es');
+    const field=pickerField(type);
+    const catalog=projectForRecord(draft)[field]||[];
+    const options=cleanOptions([...catalog,...pickerSelection[type]]);
+    const filtered=options.filter(v=>v.toLocaleLowerCase('es').includes(query));
+    const holder=$(type+'Options');
+    holder.replaceChildren();
+    if(!filtered.length){
+      const empty=document.createElement('div');empty.className='multi-picker-empty';
+      empty.textContent='Sin coincidencias. Puedes añadir una opción abajo.';
+      holder.append(empty);
+    }
+    for(const value of filtered){
+      const label=document.createElement('label');label.className='multi-choice';
+      const input=document.createElement('input');input.type='checkbox';
+      input.checked=pickerSelection[type].includes(value);
+      input.addEventListener('change',()=>{
+        const arr=pickerSelection[type];
+        if(input.checked&&!arr.includes(value))arr.push(value);
+        if(!input.checked)pickerSelection[type]=arr.filter(v=>v!==value);
+        syncPickerToDraft(type);updatePickerSummary(type);
+      });
+      const text=document.createElement('span');text.textContent=value;
+      label.append(input,text);holder.append(label);
+    }
+    updatePickerSummary(type);
+  }
+  function addPickerOption(type){
+    if(!draft)return;
+    const input=$(type+'New');
+    const value=input.value.trim();
+    if(!value)return;
+    const field=pickerField(type);
+    const project=projectForRecord(draft);
+    project[field]=cleanOptions([...(project[field]||[]),value]);
+    pickerSelection[type]=cleanOptions([...pickerSelection[type],value]);
+    saveProjects();syncPickerToDraft(type);
+    input.value='';$(type+'Search').value='';
+    renderPicker(type);
+  }
+  function initPickers(record){
+    for(const type of ['zone','work']){
+      pickerSelection[type]=recordValues(record,type);
+      $(type+'Search').value='';
+      $(type+'New').value='';
+      $(type+'Panel').classList.add('hidden');
+      $(type+'Toggle').setAttribute('aria-expanded','false');
+      renderPicker(type);
+    }
+  }
+  function renderProjectChoices(){
+    for(const id of ['homeProject','settingsProjectSelect']){
+      const sel=$(id);sel.replaceChildren();
+      for(const p of projects){
+        const o=document.createElement('option');o.value=p.id;o.textContent=p.name;sel.append(o);
+      }
+      sel.value=activeProjectId;
+    }
+  }
+  function fillProjectForm(){
+    const p=currentProject();
+    $('projectInput').value=p.name;
+    $('projectCodeInput').value=p.code||'';
+    $('projectPromoterInput').value=p.promoter||'';
+    $('projectContractorInput').value=p.contractor||'';
+    $('zoneOptionsInput').value=(p.zones||[]).join('\n');
+    $('workOptionsInput').value=(p.works||[]).join('\n');
+  }
+  function saveProfile(){
+    profile={
+      name:$('technicianInput').value.trim(),
+      role:$('technicianRoleInput').value.trim(),
+      email:$('technicianEmailInput').value.trim()
+    };
+    settings.technician=profile.name;
+    localStorage.setItem(profileKey,JSON.stringify(profile));
+    refreshHome();toast('Perfil del técnico guardado');
+  }
+  function addProject(){
+    const name=$('newProjectInput').value.trim();
+    if(!name){toast('Escribe el nombre de la obra',true);return;}
+    if(projects.some(p=>p.name.toLocaleLowerCase('es')===name.toLocaleLowerCase('es'))){
+      toast('Ya existe una obra con ese nombre',true);return;
+    }
+    const p=projectTemplate();p.name=name;
+    projects.push(p);
+    $('newProjectInput').value='';
+    selectProject(p.id);
+    toast('Obra creada. Configura sus zonas y trabajos.');
+  }
+
   function newDraft(type,file){
-    return {id:freshId(),type,project:settings.project,technician:settings.technician,
-      createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),zone:'',work:'',description:'',
+    return {id:freshId(),type,projectId:activeProjectId,project:currentProject().name,technician:profile.name,
+      technicianRole:profile.role,technicianEmail:profile.email,
+      createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),zone:'',work:'',zones:[],works:[],description:'',
       photo:file||null,originalName:file?.name||'',audio:null,audioMime:'',latitude:null,longitude:null,accuracy:null,gpsCapturedAt:null,gpsMessage:'Sin ubicación todavía'};
   }
   function loadEditor(record,isEdit=false,autoGPS=true){
@@ -81,7 +258,7 @@
     draft=record;editing=isEdit;
     $('editorTitle').textContent=isEdit?'Revisar registro':(record.type==='photo'?'Nueva fotografía':'Nueva nota');
     $('editorTime').textContent=`${niceDate(record.createdAt)} · ${record.technician||'Técnico sin indicar'}`;
-    $('zoneInput').value=record.zone||'';$('workInput').value=record.work||'';$('descriptionInput').value=record.description||'';
+    initPickers(record);$('descriptionInput').value=record.description||'';
     $('deleteRecord').classList.toggle('hidden',!isEdit);
     $('queueInfo').textContent=!isEdit&&photoQueue.length?`${photoQueue.length} foto(s) pendientes`:'';
     $('dictationStatus').textContent='';$('recordingStatus').textContent='';$('recordBtn').textContent='⏺ Grabar audio';
@@ -235,7 +412,7 @@
     if(!draft)return;
     if(recordingStarting||recordingFinalizing||recorder?.state==='recording'){toast('Termina la grabación antes de guardar',true);return;}
     if(recognition){toast('Termina el dictado antes de guardar',true);return;}
-    draft.zone=$('zoneInput').value.trim();draft.work=$('workInput').value.trim();draft.description=$('descriptionInput').value.trim();
+    syncPickerToDraft('zone');syncPickerToDraft('work');draft.description=$('descriptionInput').value.trim();
     if(draft.type==='note'&&!draft.description&&!draft.audio){toast('Escribe, dicta o graba una nota antes de guardar',true);return;}
     draft.updatedAt=new Date().toISOString();
     $('saveRecord').disabled=true;
@@ -255,15 +432,15 @@
   function clearListURLs(){for(const url of listUrls)URL.revokeObjectURL(url);listUrls=[];}
   async function allRecords(){return (await SersDB.getAll()).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));}
   async function refreshHome(){
-    $('homeProject').textContent=settings.project;
-    $('homeTechnician').textContent='Técnico: '+(settings.technician||'sin configurar');
-    try{const rows=await allRecords();$('homeCount').textContent=`${rows.length} registro${rows.length===1?'':'s'} guardado${rows.length===1?'':'s'}`;
+    renderProjectChoices();
+    $('homeTechnician').textContent='Técnico: '+(profile.name||'sin configurar');
+    try{const rows=(await allRecords()).filter(row=>isRecordInProject(row,currentProject()));$('homeCount').textContent=`${rows.length} registro${rows.length===1?'':'s'} guardado${rows.length===1?'':'s'}`;
       $('homeLast').textContent=rows[0]?'Último: '+niceDate(rows[0].createdAt):'Sin capturas todavía';}catch(e){toast('No se puede abrir el almacenamiento del móvil',true);}
   }
   async function refreshRecords(){
     clearListURLs();const list=$('recordsList');list.replaceChildren();
     try{
-      const rows=await allRecords();const date=$('dayFilter').value;
+      const rows=(await allRecords()).filter(row=>isRecordInProject(row,currentProject()));const date=$('dayFilter').value;
       const visible=modeAll?rows:rows.filter(r=>localDay(r.createdAt)===date);
       $('recordsSummary').textContent=modeAll?`${visible.length} registros en total`:`${visible.length} registro(s) del ${date.split('-').reverse().join('/')}`;
       if(!visible.length){const empty=document.createElement('div');empty.className='empty';empty.textContent=modeAll?'Todavía no hay registros guardados.':'No hay fotos ni notas de ese día. Prueba «Ver todos».';list.append(empty);return;}
@@ -284,14 +461,31 @@
     }catch(e){const box=document.createElement('div');box.className='empty';box.textContent='No se pudieron leer los registros. Comprueba que el navegador permite almacenamiento local.';list.append(box);console.error(e);}
   }
   function refreshSettings(){
-    $('projectInput').value=settings.project;
-    $('technicianInput').value=settings.technician;
-    $('exportDateInfo').textContent=`Día elegido en «Registros»: ${$('dayFilter').value.split('-').reverse().join('/')}. Los ZIP se guardan en Descargas del teléfono.`;
+    renderProjectChoices();
+    fillProjectForm();
+    $('technicianInput').value=profile.name||'';
+    $('technicianRoleInput').value=profile.role||'';
+    $('technicianEmailInput').value=profile.email||'';
+    $('exportDateInfo').textContent='Exportación de «'+currentProject().name+'». Día elegido en Registros: '+
+      $('dayFilter').value.split('-').reverse().join('/')+'. Los ZIP se guardan en Descargas.';
   }
   function saveSettings(){
-    const project=$('projectInput').value.trim(),tech=$('technicianInput').value.trim();
-    if(!project){toast('Indica el nombre de la obra',true);return;}
-    settings={project,technician:tech};localStorage.setItem(settingsKey,JSON.stringify(settings));toast('Configuración guardada');
+    const p=currentProject();
+    const name=$('projectInput').value.trim();
+    if(!name){toast('Indica el nombre de la obra',true);return;}
+    if(projects.some(other=>other.id!==p.id&&other.name.toLocaleLowerCase('es')===name.toLocaleLowerCase('es'))){
+      toast('Ya existe una obra con ese nombre',true);return;
+    }
+    p.name=name;
+    p.code=$('projectCodeInput').value.trim();
+    p.promoter=$('projectPromoterInput').value.trim();
+    p.contractor=$('projectContractorInput').value.trim();
+    p.zones=readOptions($('zoneOptionsInput').value);
+    p.works=readOptions($('workOptionsInput').value);
+    settings.project=p.name;
+    saveProjects();
+    renderProjectChoices();fillProjectForm();refreshHome();
+    toast('Configuración de la obra guardada');
   }
   const safeName=text=>(text||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,70)||'sin_nombre';
   const csvCell=v=>{
@@ -308,7 +502,7 @@
     const button=$(which==='all'?'exportAll':'exportDay');
     button.disabled=true;button.textContent='Preparando ZIP…';
     try{
-      const rows=(await allRecords()).filter(r=>which==='all'||localDay(r.createdAt)===$('dayFilter').value);
+      const rows=(await allRecords()).filter(r=>isRecordInProject(r,currentProject())&&(which==='all'||localDay(r.createdAt)===$('dayFilter').value));
       if(!rows.length){toast('No hay registros para exportar',true);return;}
       const zipFiles=[];const manifest=[];
       const cols=['id','obra','tecnico','tipo','fecha_hora','zona','unidad_trabajo','descripcion','latitud','longitud','precision_m','foto','audio'];
@@ -322,23 +516,24 @@
         const audioFile=row.audio?`audios/${stem}.${extensionFromMime(row.audio,true)}`:'';
         if(row.photo)zipFiles.push({name:photoFile,data:row.photo,date:row.createdAt});
         if(row.audio)zipFiles.push({name:audioFile,data:row.audio,date:row.createdAt});
-        manifest.push({id:row.id,obra:row.project,tecnico:row.technician,tipo:row.type,
-          fecha_hora:row.createdAt,zona:row.zone,unidad_trabajo:row.work,descripcion:row.description,
+        manifest.push({id:row.id,obra:row.project,obra_id:row.projectId||null,tecnico:row.technician,tipo:row.type,
+          fecha_hora:row.createdAt,zona:row.zone,unidad_trabajo:row.work,
+          zonas:recordValues(row,'zone'),unidades:recordValues(row,'work'),descripcion:row.description,
           latitud:row.latitude,longitud:row.longitude,precision_m:row.accuracy,
           gps_hora:row.gpsCapturedAt,foto:photoFile,audio:audioFile,nombre_foto_original:row.originalName||''});
       }
       const csv='\ufeff'+[cols.join(';'),...manifest.map(item=>cols.map(key=>csvCell(item[key])).join(';'))].join('\r\n');
-      zipFiles.push({name:'registros.json',data:JSON.stringify({version:1,generado:new Date().toISOString(),registros:manifest},null,2)});
+      zipFiles.push({name:'registros.json',data:JSON.stringify({version:2,generado:new Date().toISOString(),obra:currentProject(),tecnico:profile,registros:manifest},null,2)});
       zipFiles.push({name:'registros_excel.csv',data:csv});
-      zipFiles.push({name:'LEEME.txt',data:'SERS · Diario de obra (piloto)\r\n\r\nregistros.json: datos estructurados para la futura automatización.\r\nregistros_excel.csv: resumen para Excel (separador ;).\r\nfotografias/: fotografías sin recomprimir.\r\naudios/: notas de voz originales.\r\n\r\nFecha/hora: momento en que se añadió el registro a la aplicación.\r\nGPS: ubicación del móvil en el momento de solicitarla; si la foto se importó de la galería, no implica necesariamente la ubicación donde se tomó.\r\nLas notas de la planificación y la meteorología se incorporarán en una fase posterior.\r\nLos originales siguen guardados en este teléfono hasta que los elimines o se borren los datos del navegador.\r\n'});
+      zipFiles.push({name:'LEEME.txt',data:'SERS · Diario de obra\r\n\r\nregistros.json: datos estructurados para la futura automatización.\r\nregistros_excel.csv: resumen para Excel (separador ;).\r\nfotografias/: fotografías sin recomprimir.\r\naudios/: notas de voz originales.\r\n\r\nFecha/hora: momento en que se añadió el registro a la aplicación.\r\nGPS: ubicación del móvil en el momento de solicitarla; si la foto se importó de la galería, no implica necesariamente la ubicación donde se tomó.\r\nLas notas de la planificación y la meteorología se incorporarán en una fase posterior.\r\nLos originales siguen guardados en este teléfono hasta que los elimines o se borren los datos del navegador.\r\n'});
       const zip=await SersZip.create(zipFiles);
       const dateInfo=which==='all'?'completo':$('dayFilter').value;
-      const name=`SERS_${safeName(settings.project).slice(0,35)}_${dateInfo}_${localDay(new Date())}.zip`;
+      const name=`SERS_${safeName(currentProject().name).slice(0,35)}_${dateInfo}_${localDay(new Date())}.zip`;
       const url=URL.createObjectURL(zip);const anchor=document.createElement('a');anchor.href=url;anchor.download=name;document.body.append(anchor);anchor.click();anchor.remove();
       setTimeout(()=>URL.revokeObjectURL(url),60000);
       toast(`${rows.length} registro(s) exportados. Busca el ZIP en Descargas.`);
     }catch(e){console.error(e);toast('No se pudo generar el ZIP: revisa el espacio libre y vuelve a intentarlo.',true);}
-    finally{button.disabled=false;button.textContent=which==='all'?'Exportar todos los registros':'Exportar el día seleccionado';}
+    finally{button.disabled=false;button.textContent=which==='all'?'Exportar todos los registros de esta obra':'Exportar el día seleccionado';}
   }
 
   function navTo(name){
@@ -369,6 +564,27 @@
   $('saveRecord').addEventListener('click',save);
   $('deleteRecord').addEventListener('click',del);
   $('saveSettings').addEventListener('click',saveSettings);
+  $('saveProfile').addEventListener('click',saveProfile);
+  $('addProject').addEventListener('click',addProject);
+  $('homeProject').addEventListener('change',v=>selectProject(v.target.value));
+  $('settingsProjectSelect').addEventListener('change',v=>selectProject(v.target.value));
+  for(const type of ['zone','work']){
+    $(type+'Toggle').addEventListener('click',()=>{
+      const panel=$(type+'Panel');
+      panel.classList.toggle('hidden');
+      $(type+'Toggle').setAttribute('aria-expanded',String(!panel.classList.contains('hidden')));
+      if(!panel.classList.contains('hidden'))renderPicker(type);
+    });
+    $(type+'Done').addEventListener('click',()=>{
+      $(type+'Panel').classList.add('hidden');
+      $(type+'Toggle').setAttribute('aria-expanded','false');
+    });
+    $(type+'Search').addEventListener('input',()=>renderPicker(type));
+    $(type+'Add').addEventListener('click',()=>addPickerOption(type));
+    $(type+'New').addEventListener('keydown',event=>{
+      if(event.key==='Enter'){event.preventDefault();addPickerOption(type);}
+    });
+  }
   $('exportDay').addEventListener('click',()=>exportZip('day'));
   $('exportAll').addEventListener('click',()=>exportZip('all'));
   $('dayFilter').value=localDay(new Date());
@@ -380,5 +596,5 @@
   if('serviceWorker' in navigator && location.protocol.startsWith('http')){
     navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('El modo sin conexión requiere HTTPS o localhost:',err));
   }
-  initConnection();view('home');
+  saveProjects();initConnection();view('home');
 })();
