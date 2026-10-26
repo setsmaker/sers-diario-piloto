@@ -7,12 +7,25 @@
   const projectsKey='sers-diario-projects-v2';
   const activeProjectKey='sers-diario-active-project-v2';
   const profileKey='sers-diario-profile-v2';
+  const catalogCacheKey='sers-diario-catalogo-publico-v1';
+  const lastChoicesKey='sers-diario-ultimas-selecciones-v1';
+  const activeVisitsKey='sers-diario-visitas-activas-v1';
+  let lastChoices={},activeVisits={},recoverableDraft=null,draftTimer=null,draftWrites=Promise.resolve(),previewURLs=[];
+  try{lastChoices=JSON.parse(localStorage.getItem(lastChoicesKey)||'{}')||{};}catch{}
+  try{activeVisits=JSON.parse(localStorage.getItem(activeVisitsKey)||'{}')||{};}catch{}
+
   const projectTemplate=()=>({
     id:freshId(),name:settings.project||DEFAULTS.project,code:'',promoter:'',contractor:'',
     zones:[],works:[]
   });
+  function convertPublicProject(item){
+    return {id:item.id,name:item.nombre,code:item.codigo||'',promoter:'',
+      contractor:'',zones:item.zonas||[],works:item.unidades||[],public:true};
+  }
   function loadProjects(){
     try{
+      const catalog=JSON.parse(localStorage.getItem(catalogCacheKey)||'null');
+      if(Array.isArray(catalog?.obras)&&catalog.obras.length)return catalog.obras.map(convertPublicProject);
       const value=JSON.parse(localStorage.getItem(projectsKey)||'null');
       if(Array.isArray(value)){
         const valid=value.filter(p=>p&&typeof p.name==='string'&&p.id).map(p=>({
@@ -39,7 +52,7 @@
     return projects.find(p=>p.id===record.projectId)||projects.find(p=>p.name===record.project)||currentProject();
   }
   function isRecordInProject(record,project){
-    return record.projectId?record.projectId===project.id:record.project===project.name;
+    return record.projectId===project.id || record.project===project.name;
   }
   function saveProjects(){
     localStorage.setItem(projectsKey,JSON.stringify(projects));
@@ -50,7 +63,7 @@
     activeProjectId=id;
     saveProjects();
     renderProjectChoices();
-    fillProjectForm();
+    renderProjectDetail();
     refreshHome();
     if(currentView==='records')refreshRecords();
   }
@@ -195,9 +208,9 @@
     if(!value)return;
     const field=pickerField(type);
     const project=projectForRecord(draft);
-    project[field]=cleanOptions([...(project[field]||[]),value]);
+    // Opción excepcional solo para el registro: no modifica el catálogo común.
     pickerSelection[type]=cleanOptions([...pickerSelection[type],value]);
-    saveProjects();syncPickerToDraft(type);
+    syncPickerToDraft(type);scheduleDraftSave();
     input.value='';$(type+'Search').value='';
     renderPicker(type);
   }
@@ -220,14 +233,51 @@
       sel.value=activeProjectId;
     }
   }
-  function fillProjectForm(){
-    const p=currentProject();
-    $('projectInput').value=p.name;
-    $('projectCodeInput').value=p.code||'';
-    $('projectPromoterInput').value=p.promoter||'';
-    $('projectContractorInput').value=p.contractor||'';
-    $('zoneOptionsInput').value=(p.zones||[]).join('\n');
-    $('workOptionsInput').value=(p.works||[]).join('\n');
+
+  function renderProjectDetail(){
+    const p=currentProject(),holder=$('projectDetail');
+    if(!holder||!p)return;
+    holder.replaceChildren();
+    const rows=[
+      ['Obra',p.name],['Código',p.code||'—'],
+      ['Zonas',(p.zones||[]).join(' · ')||'Sin definir'],
+      ['Unidades',(p.works||[]).join(' · ')||'Sin definir']
+    ];
+    for(const [label,value] of rows){
+      const line=document.createElement('p');
+      const b=document.createElement('strong');b.textContent=label+': ';
+      line.append(b,document.createTextNode(value));holder.append(line);
+    }
+  }
+  function applyPublicCatalog(data){
+    if(!data||!Array.isArray(data.obras))throw new Error('Formato de catálogo inválido');
+    const mapped=data.obras.filter(x=>x.activa!==false&&typeof x.nombre==='string'&&
+      typeof x.id==='string'&&Array.isArray(x.zonas)&&Array.isArray(x.unidades))
+      .map(convertPublicProject);
+    if(!mapped.length)throw new Error('El catálogo no contiene obras activas');
+    const previous=currentProject();
+    const chosen=mapped.find(p=>p.id===activeProjectId)||
+      mapped.find(p=>p.name===previous?.name)||mapped[0];
+    projects=mapped;activeProjectId=chosen.id;
+    localStorage.setItem(catalogCacheKey,JSON.stringify(data));
+    // Las obras compartidas no se editan ni suben desde los móviles.
+    localStorage.setItem(activeProjectKey,activeProjectId);
+    renderProjectChoices();renderProjectDetail();refreshHome();
+    if(currentView==='records')refreshRecords();
+  }
+  async function refreshPublicCatalog(manual=false){
+    const status=$('catalogStatus');
+    try{
+      const response=await fetch('./obras.json?t='+Date.now(),{cache:'no-store'});
+      if(!response.ok)throw new Error('HTTP '+response.status);
+      const data=await response.json();
+      applyPublicCatalog(data);
+      status.textContent='Catálogo actualizado desde GitHub. Disponible sin conexión.';
+      if(manual)toast('Obras actualizadas desde GitHub');
+    }catch(e){
+      status.textContent='Sin acceso al catálogo. Se utiliza la última copia local.';
+      if(manual)toast('No se pudo descargar el catálogo',true);
+    }
   }
   function saveProfile(){
     profile={
@@ -467,30 +517,12 @@
   }
   function refreshSettings(){
     renderProjectChoices();
-    fillProjectForm();
+    renderProjectDetail();
     $('technicianInput').value=profile.name||'';
     $('technicianRoleInput').value=profile.role||'';
     $('technicianEmailInput').value=profile.email||'';
     $('exportDateInfo').textContent='Exportación de «'+currentProject().name+'». Día elegido en Registros: '+
       $('dayFilter').value.split('-').reverse().join('/')+'. Los ZIP se guardan en Descargas.';
-  }
-  function saveSettings(){
-    const p=currentProject();
-    const name=$('projectInput').value.trim();
-    if(!name){toast('Indica el nombre de la obra',true);return;}
-    if(projects.some(other=>other.id!==p.id&&other.name.toLocaleLowerCase('es')===name.toLocaleLowerCase('es'))){
-      toast('Ya existe una obra con ese nombre',true);return;
-    }
-    p.name=name;
-    p.code=$('projectCodeInput').value.trim();
-    p.promoter=$('projectPromoterInput').value.trim();
-    p.contractor=$('projectContractorInput').value.trim();
-    p.zones=readOptions($('zoneOptionsInput').value);
-    p.works=readOptions($('workOptionsInput').value);
-    settings.project=p.name;
-    saveProjects();
-    renderProjectChoices();fillProjectForm();refreshHome();
-    toast('Configuración de la obra guardada');
   }
   const safeName=text=>(text||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,70)||'sin_nombre';
   const csvCell=v=>{
@@ -568,9 +600,8 @@
   });
   $('saveRecord').addEventListener('click',save);
   $('deleteRecord').addEventListener('click',del);
-  $('saveSettings').addEventListener('click',saveSettings);
   $('saveProfile').addEventListener('click',saveProfile);
-  $('addProject').addEventListener('click',addProject);
+  $('refreshCatalog').addEventListener('click',()=>refreshPublicCatalog(true));
   $('homeProject').addEventListener('change',v=>selectProject(v.target.value));
   $('settingsProjectSelect').addEventListener('change',v=>selectProject(v.target.value));
   for(const type of ['zone','work']){
@@ -596,10 +627,10 @@
   $('dayFilter').addEventListener('change',()=>{modeAll=false;$('showAll').classList.remove('hidden');$('showToday').classList.add('hidden');refreshRecords();});
   $('showAll').addEventListener('click',()=>{modeAll=true;$('showAll').classList.add('hidden');$('showToday').classList.remove('hidden');refreshRecords();});
   $('showToday').addEventListener('click',()=>{modeAll=false;$('dayFilter').value=localDay(new Date());$('showAll').classList.remove('hidden');$('showToday').classList.add('hidden');refreshRecords();});
-  window.addEventListener('online',initConnection);window.addEventListener('offline',initConnection);
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden && currentView==='home')refreshHome();});
+  window.addEventListener('online',()=>{initConnection();refreshPublicCatalog();});window.addEventListener('offline',initConnection);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden){if(currentView==='home')refreshHome();refreshPublicCatalog();}});
   if('serviceWorker' in navigator && location.protocol.startsWith('http')){
     navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('El modo sin conexión requiere HTTPS o localhost:',err));
   }
-  saveProjects();initConnection();view('home');
+  initConnection();view('home');refreshPublicCatalog();
 })();
