@@ -426,19 +426,6 @@
     localStorage.setItem(profileKey,JSON.stringify(profile));
     refreshHome();toast('Perfil del técnico guardado');
   }
-  function addProject(){
-    const name=$('newProjectInput').value.trim();
-    if(!name){toast('Escribe el nombre de la obra',true);return;}
-    if(projects.some(p=>p.name.toLocaleLowerCase('es')===name.toLocaleLowerCase('es'))){
-      toast('Ya existe una obra con ese nombre',true);return;
-    }
-    const p=projectTemplate();p.name=name;
-    projects.push(p);
-    $('newProjectInput').value='';
-    selectProject(p.id);
-    toast('Obra creada. Configura sus zonas y trabajos.');
-  }
-
   function newDraft(type,file){
     return {id:freshId(),type,projectId:activeProjectId,project:currentProject().name,technician:profile.name,
       technicianRole:profile.role,technicianEmail:profile.email,visitId:activeVisits[activeProjectId]||null,
