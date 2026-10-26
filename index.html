@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#112c3d">
+  <meta name="theme-color" content="#397558">
   <meta name="description" content="Captura de fotos y notas de visitas de obra, sin conexión y sin cuotas.">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" sizes="192x192" href="./icons/icon-192.png">
@@ -14,7 +14,7 @@
 <body>
   <div id="app">
     <header class="masthead">
-      <div class="brand"><span class="symbol" aria-hidden="true">S</span><div><div class="brand-first">SERS</div><div class="brand-sub">Diario de obra · piloto</div></div></div>
+      <div class="brand"><span class="symbol" aria-hidden="true">S</span><div><div class="brand-first">SERS</div><div class="brand-sub">Diario de obra</div></div></div>
       <span id="networkStatus" class="connection">Comprobando…</span>
     </header>
 
@@ -27,7 +27,7 @@
         </div>
         <div class="project-panel">
           <span class="small-label">OBRA ACTIVA</span>
-          <strong id="homeProject">Portillo · Urbanización E-19</strong>
+          <select id="homeProject" class="project-chooser" aria-label="Seleccionar obra activa"></select>
           <span id="homeTechnician" class="muted">Técnico: sin configurar</span>
         </div>
         <div class="actions">
@@ -54,21 +54,48 @@
       <section id="view-settings" class="view hidden" aria-label="Ajustes y exportación">
         <div class="section-heading"><p class="kicker">CONFIGURACIÓN</p><h1>Obra y técnico</h1></div>
         <div class="sheet">
-          <label for="projectInput">Obra activa</label>
-          <input id="projectInput" type="text" maxlength="120" autocomplete="off" placeholder="Nombre de la obra">
-          <label for="technicianInput">Nombre del técnico</label>
-          <input id="technicianInput" type="text" maxlength="90" autocomplete="name" placeholder="Tu nombre">
-          <button id="saveSettings" type="button" class="button button-primary full">Guardar configuración</button>
+          <h2>Mi perfil</h2>
+          <label for="technicianInput">Nombre y apellidos del técnico</label>
+          <input id="technicianInput" type="text" maxlength="90" autocomplete="name" placeholder="Nombre y apellidos">
+          <label for="technicianRoleInput">Cargo (opcional)</label>
+          <input id="technicianRoleInput" type="text" maxlength="100" placeholder="Director de obra, asistencia técnica…">
+          <label for="technicianEmailInput">Correo (opcional)</label>
+          <input id="technicianEmailInput" type="email" maxlength="150" autocomplete="email" placeholder="correo@empresa.com">
+          <button id="saveProfile" type="button" class="button button-primary full">Guardar perfil</button>
+        </div>
+        <div class="sheet">
+          <h2>Mis obras</h2>
+          <label for="settingsProjectSelect">Obra activa</label>
+          <select id="settingsProjectSelect"></select>
+          <label for="projectInput">Nombre de la obra</label>
+          <input id="projectInput" type="text" maxlength="120" placeholder="Nombre de la obra">
+          <label for="projectCodeInput">Código / expediente (opcional)</label>
+          <input id="projectCodeInput" type="text" maxlength="80">
+          <label for="projectPromoterInput">Promotor (opcional)</label>
+          <input id="projectPromoterInput" type="text" maxlength="120">
+          <label for="projectContractorInput">Contratista (opcional)</label>
+          <input id="projectContractorInput" type="text" maxlength="120">
+          <label for="zoneOptionsInput">Zonas de la obra</label>
+          <textarea id="zoneOptionsInput" rows="5" placeholder="Una zona por línea. Por ejemplo:&#10;Anselmo Clavé&#10;Parque Central"></textarea>
+          <label for="workOptionsInput">Unidades o trabajos</label>
+          <textarea id="workOptionsInput" rows="5" placeholder="Una unidad por línea. Por ejemplo:&#10;Saneamiento&#10;Pavimentación"></textarea>
+          <p class="hint">Introduce una opción por línea. Después podrás marcar varias zonas y varios trabajos en cada registro.</p>
+          <button id="saveSettings" type="button" class="button button-primary full">Guardar configuración de obra</button>
+          <div class="add-project">
+            <label for="newProjectInput">Crear otra obra</label>
+            <input id="newProjectInput" type="text" maxlength="120" placeholder="Nombre de la nueva obra">
+            <button id="addProject" type="button" class="button button-outline full">+ Crear y seleccionar obra</button>
+          </div>
         </div>
         <div class="sheet">
           <h2>Exportar al ordenador</h2>
           <p>Descarga un ZIP con fotografías originales, audios, descripciones, ubicaciones, fechas y un CSV para Excel.</p>
           <button id="exportDay" type="button" class="button button-primary full">Exportar el día seleccionado</button>
-          <button id="exportAll" type="button" class="button button-outline full">Exportar todos los registros</button>
+          <button id="exportAll" type="button" class="button button-outline full">Exportar todos los registros de esta obra</button>
           <p id="exportDateInfo" class="hint"></p>
         </div>
         <div class="sheet discreet">
-          <h2>Sobre este piloto</h2>
+          <h2>Información y almacenamiento</h2>
           <p>Los registros se almacenan en este navegador, en este dispositivo. No se sincronizan entre móviles. Exporta copias periódicamente: borrar los datos del navegador puede hacer que se pierdan.</p>
           <p>La transcripción utiliza el reconocimiento de voz del navegador cuando está disponible. Puede necesitar Internet. Si no aparece, utiliza el micrófono del teclado.</p>
         </div>
@@ -80,10 +107,34 @@
         <p class="editor-time" id="editorTime"></p>
         <div id="photoArea" class="photo-area hidden"><img id="photoPreview" alt="Foto del registro"><p id="photoFilename" class="filename"></p></div>
         <div class="sheet editor-form">
-          <label for="zoneInput">Zona de la obra <span class="optional">(opcional)</span></label>
-          <input id="zoneInput" type="text" maxlength="120" placeholder="Ej.: Anselmo Clavé, parque, andenes...">
-          <label for="workInput">Unidad o trabajo <span class="optional">(opcional)</span></label>
-          <input id="workInput" type="text" maxlength="140" placeholder="Ej.: bordillos, pavimentación...">
+<label id="zoneLabel">Zonas de la obra <span class="optional">(puedes elegir varias)</span></label>
+          <div class="multi-picker" id="zonePicker">
+            <button type="button" class="multi-picker-toggle" id="zoneToggle" aria-expanded="false" aria-controls="zonePanel">Seleccionar zonas <span aria-hidden="true">▾</span></button>
+            <div id="zoneSelected" class="multi-selected" aria-live="polite"></div>
+            <div id="zonePanel" class="multi-picker-panel hidden">
+              <input id="zoneSearch" type="search" placeholder="Buscar…" autocomplete="off" aria-label="Buscar zonas">
+              <div id="zoneOptions" class="multi-picker-list" role="group" aria-labelledby="zoneLabel"></div>
+              <div class="inline-controls multi-add">
+                <input id="zoneNew" type="text" maxlength="120" placeholder="Añadir otra opción">
+                <button id="zoneAdd" type="button" class="button button-outline button-small">Añadir</button>
+              </div>
+              <button id="zoneDone" type="button" class="button button-primary button-small full">Listo</button>
+            </div>
+          </div>
+          <label id="workLabel">Unidades o trabajos <span class="optional">(puedes elegir varias)</span></label>
+          <div class="multi-picker" id="workPicker">
+            <button type="button" class="multi-picker-toggle" id="workToggle" aria-expanded="false" aria-controls="workPanel">Seleccionar trabajos <span aria-hidden="true">▾</span></button>
+            <div id="workSelected" class="multi-selected" aria-live="polite"></div>
+            <div id="workPanel" class="multi-picker-panel hidden">
+              <input id="workSearch" type="search" placeholder="Buscar…" autocomplete="off" aria-label="Buscar trabajos">
+              <div id="workOptions" class="multi-picker-list" role="group" aria-labelledby="workLabel"></div>
+              <div class="inline-controls multi-add">
+                <input id="workNew" type="text" maxlength="120" placeholder="Añadir otra opción">
+                <button id="workAdd" type="button" class="button button-outline button-small">Añadir</button>
+              </div>
+              <button id="workDone" type="button" class="button button-primary button-small full">Listo</button>
+            </div>
+          </div>
           <label for="descriptionInput">Descripción / nota</label>
           <textarea id="descriptionInput" rows="5" placeholder="Cuenta lo que estás viendo. Puedes dictarlo usando el botón o el micrófono del teclado."></textarea>
           <div class="inline-controls">
@@ -94,7 +145,7 @@
         </div>
         <div class="sheet editor-form">
           <h2>Nota de voz original <span class="optional">(opcional)</span></h2>
-          <p class="hint">Puedes grabar una explicación y conservar el audio. La grabación no se transcribe automáticamente en esta primera versión.</p>
+          <p class="hint">Puedes grabar una explicación y conservar el audio. La grabación no se transcribe automáticamente automáticamente por ahora.</p>
           <div class="inline-controls">
             <button id="recordBtn" type="button" class="button button-outline">⏺ Grabar audio</button>
             <button id="removeAudio" type="button" class="button button-danger hidden">Quitar audio</button>
