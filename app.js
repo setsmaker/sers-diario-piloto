@@ -473,11 +473,15 @@
   }
   function abortDraft(){
     haltSpeech();
-    if(recordingStarting||recordingFinalizing||recorder?.state==='recording'){toast('Termina la grabación antes de salir');return;}
-    const hasQueue=photoQueue.length>0;
-    if(hasQueue&&!confirm('Hay fotos pendientes de registrar. ¿Descartarlas?'))return;
+    if(recordingStarting||recordingFinalizing||recorder?.state==='recording'){
+      toast('Termina la grabación antes de salir');return;
+    }
+    const keep=!editing&&Boolean($('descriptionInput').value.trim()||photoItems(draft).length||draft?.audio);
+    if(keep)persistDraft();
+    else if(!editing)clearSavedDraft();
     photoQueue=[];draft=null;editing=false;
-    clearSavedDraft();view('records');
+    view('records');
+    if(keep)toast('Borrador guardado. Puedes recuperarlo desde Capturar.');
   }
   function mediaError(error){return error?.name==='NotAllowedError'?'Permiso de micrófono denegado':(error?.message||'No se pudo acceder al micrófono');}
   function startRecording(){
