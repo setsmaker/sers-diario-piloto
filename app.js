@@ -82,6 +82,92 @@
   };
 
   function readSettings(){try{return {...DEFAULTS,...JSON.parse(localStorage.getItem(settingsKey)||'{}')};}catch{return {...DEFAULTS};}}
+
+  function updateDraftFromForm(){
+    if(!draft||editing)return;
+    draft.description=$('descriptionInput').value;
+    for(const kind of ['zone','work']){
+      draft[kind==='zone'?'zones':'works']=[...pickerSelection[kind]];
+      draft[kind]=pickerSelection[kind].join(' | ');
+    }
+  }
+  function scheduleDraftSave(){
+    if(!draft||editing)return;
+    clearTimeout(draftTimer);
+    draftTimer=setTimeout(()=>{persistDraft();},650);
+  }
+  function persistDraft(){
+    if(!draft||editing)return draftWrites;
+    clearTimeout(draftTimer);
+    updateDraftFromForm();
+    const snapshot={...draft,photos:photoItems(draft).map(item=>({...item}))};
+    draftWrites=draftWrites.catch(()=>{}).then(()=>SersDB.saveDraft({
+      data:snapshot,savedAt:new Date().toISOString()
+    }));
+    draftWrites.catch(error=>console.error('No se pudo guardar el borrador',error));
+    return draftWrites;
+  }
+  async function clearSavedDraft(){
+    clearTimeout(draftTimer);
+    try{await draftWrites;await SersDB.clearDraft();}catch(error){console.error(error);}
+    recoverableDraft=null;
+    $('draftRecovery').classList.add('hidden');
+  }
+  async function checkForDraft(){
+    try{
+      const item=await SersDB.getDraft();
+      recoverableDraft=item?.data||null;
+      $('draftRecovery').classList.toggle('hidden',!recoverableDraft);
+    }catch(error){console.error('No se pudo revisar el borrador',error);}
+  }
+  function activeVisitId(){return activeVisits[activeProjectId]||null;}
+  function updateVisitStatus(){
+    const id=activeVisitId();
+    $('visitStatus').textContent=id?
+      'Visita iniciada. Los nuevos registros se asociarán a esta visita.':
+      'Sin visita abierta. Puedes tomar fotos y notas normalmente.';
+    $('startVisit').classList.toggle('hidden',Boolean(id));
+    $('endVisit').classList.toggle('hidden',!id);
+  }
+  async function startVisit(){
+    if(activeVisitId())return;
+    const project=currentProject();
+    const visit={id:freshId(),projectId:project.id,project:project.name,
+      technician:profile.name,startedAt:new Date().toISOString(),finishedAt:null};
+    try{
+      await SersDB.putVisit(visit);
+      activeVisits[project.id]=visit.id;
+      localStorage.setItem(activeVisitsKey,JSON.stringify(activeVisits));
+      updateVisitStatus();
+      toast('Visita iniciada. Puedes tomar fotografías y notas.');
+    }catch(e){toast('No se pudo iniciar la visita',true);}
+  }
+  async function endVisit(){
+    const id=activeVisitId();
+    if(!id)return;
+    if(!confirm('¿Finalizar la visita de obra actual?'))return;
+    try{
+      const visit=await SersDB.getVisit(id);
+      if(visit){visit.finishedAt=new Date().toISOString();await SersDB.putVisit(visit);}
+      delete activeVisits[activeProjectId];
+      localStorage.setItem(activeVisitsKey,JSON.stringify(activeVisits));
+      updateVisitStatus();toast('Visita finalizada');
+    }catch(e){toast('No se pudo cerrar la visita',true);}
+  }
+  async function renderVisitFilter(){
+    const filter=$('visitFilter');
+    const chosen=filter.value||'all';
+    const visits=(await SersDB.getVisits())
+      .filter(v=>isRecordInProject(v,currentProject()))
+      .sort((a,b)=>b.startedAt.localeCompare(a.startedAt));
+    filter.replaceChildren();
+    const options=[['all','Todas las visitas y registros sueltos'],['none','Sin visita'],
+      ...visits.map(v=>[v.id,'Visita '+niceDate(v.startedAt)+(v.finishedAt?'':' (abierta)')])];
+    for(const [id,label] of options){
+      const option=document.createElement('option');option.value=id;option.textContent=label;filter.append(option);
+    }
+    filter.value=options.some(x=>x[0]===chosen)?chosen:'all';
+  }
   function localDay(date){const d=new Date(date);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
   function niceDate(t){return new Date(t).toLocaleString('es-ES',{dateStyle:'medium',timeStyle:'short'});}
   function hours(t){return new Date(t).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});}
@@ -91,8 +177,8 @@
     for(const k of ['home','records','settings','editor'])ui[k].classList.toggle('hidden',name!==k);
     for(const k of ['Home','Records','Settings'])ui['nav'+k].classList.toggle('selected',k.toLowerCase()===name);
     window.scrollTo(0,0);
-    if(name==='home') refreshHome();
-    if(name==='records') refreshRecords();
+    if(name==='home'){refreshHome();checkForDraft();}
+    if(name==='records')refreshRecords();
     if(name==='settings') refreshSettings();
   }
   function initConnection(){
@@ -240,7 +326,7 @@
         const arr=pickerSelection[type];
         if(input.checked&&!arr.includes(value))arr.push(value);
         if(!input.checked)pickerSelection[type]=arr.filter(v=>v!==value);
-        syncPickerToDraft(type);updatePickerSummary(type);
+        syncPickerToDraft(type);updatePickerSummary(type);scheduleDraftSave();
       });
       const text=document.createElement('span');text.textContent=value;
       label.append(input,text);holder.append(label);
@@ -351,7 +437,9 @@
   function newDraft(type,file){
     return {id:freshId(),type,projectId:activeProjectId,project:currentProject().name,technician:profile.name,
       technicianRole:profile.role,technicianEmail:profile.email,visitId:activeVisits[activeProjectId]||null,
-      createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),zone:'',work:'',zones:[],works:[],description:'',
+      createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),zone:'',work:'',
+      zones:[...(lastChoices[activeProjectId]?.zones||[])],works:[...(lastChoices[activeProjectId]?.works||[])],
+      description:'',
       photos:file?[{id:freshId(),blob:file,originalName:file.name,caption:''}]:[],
       photo:null,originalName:file?.name||'',audio:null,audioMime:'',latitude:null,longitude:null,accuracy:null,gpsCapturedAt:null,gpsMessage:'Sin ubicación todavía'};
   }
@@ -365,6 +453,7 @@
     $('queueInfo').textContent=!isEdit&&photoQueue.length?`${photoQueue.length} foto(s) pendientes`:'';
     $('dictationStatus').textContent='';$('recordingStatus').textContent='';$('recordBtn').textContent='⏺ Grabar audio';
     setPhotoPreview();setAudioPreview();updateGpsDisplay();view('editor');
+    if(!isEdit)scheduleDraftSave();
     if(autoGPS)acquireGPS();
   }
   function createNote(){photoQueue=[];loadEditor(newDraft('note'),false,true);}
@@ -384,7 +473,7 @@
     const hasQueue=photoQueue.length>0;
     if(hasQueue&&!confirm('Hay fotos pendientes de registrar. ¿Descartarlas?'))return;
     photoQueue=[];draft=null;editing=false;
-    view('records');
+    clearSavedDraft();view('records');
   }
   function mediaError(error){return error?.name==='NotAllowedError'?'Permiso de micrófono denegado':(error?.message||'No se pudo acceder al micrófono');}
   function startRecording(){
@@ -404,7 +493,7 @@
         recorder.onerror=()=>{ $('recordingStatus').textContent='Error durante la grabación.'; };
         recorder.onstop=()=>{
           recordingFinalizing=false;
-          if(draft===target && audioChunks.length){target.audio=new Blob(audioChunks,{type:recorder?.mimeType||'audio/webm'});target.audioMime=target.audio.type;setAudioPreview();$('recordingStatus').textContent='Audio grabado. Escúchalo antes de guardar.';}
+          if(draft===target && audioChunks.length){target.audio=new Blob(audioChunks,{type:recorder?.mimeType||'audio/webm'});target.audioMime=target.audio.type;setAudioPreview();scheduleDraftSave();$('recordingStatus').textContent='Audio grabado. Escúchalo antes de guardar.';}
           if(mediaStream){mediaStream.getTracks().forEach(track=>track.stop());mediaStream=null;}
           $('recordBtn').textContent='⏺ Volver a grabar';audioChunks=[];
         };
@@ -426,6 +515,7 @@
       $('descriptionInput').value=withSpeechBase(state.base,state.final);
     }
     recognition=null;speechState=null;
+    scheduleDraftSave();
     $('dictateBtn').disabled=false;
     $('dictateBtn').textContent='🎤 Dictar texto';
     if(!state?.error){
@@ -520,9 +610,17 @@
     if(draft.type==='photo'&&!photoItems(draft).length){toast('Añade alguna fotografía antes de guardar',true);return;}
     draft.updatedAt=new Date().toISOString();
     $('saveRecord').disabled=true;
+    clearTimeout(draftTimer);
     try{
       // El estado GPS textual es solo de interfaz; no hace falta incluirlo en datos exportados.
       await SersDB.put({...draft,gpsMessage:undefined});
+      if(!editing){
+        lastChoices[draft.projectId||activeProjectId]={
+          zones:[...pickerSelection.zone],works:[...pickerSelection.work]
+        };
+        localStorage.setItem(lastChoicesKey,JSON.stringify(lastChoices));
+        await clearSavedDraft();
+      }
       if(!editing&&photoQueue.length){const next=photoQueue.shift();loadEditor(newDraft('photo',next),false,false);draft.gpsMessage='Foto importada: si necesitas el GPS, pulsa «Obtener ubicación».';updateGpsDisplay();toast('Foto guardada. Continúa con la siguiente.');}
       else{photoQueue=[];draft=null;view('records');toast('Registro guardado en el móvil');}
     }catch(error){toast('No se pudo guardar: comprueba el espacio libre del móvil',true);console.error(error);}
@@ -536,16 +634,20 @@
   function clearListURLs(){for(const url of listUrls)URL.revokeObjectURL(url);listUrls=[];}
   async function allRecords(){return (await SersDB.getAll()).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));}
   async function refreshHome(){
-    renderProjectChoices();
+    renderProjectChoices();updateVisitStatus();
     $('homeTechnician').textContent='Técnico: '+(profile.name||'sin configurar');
     try{const rows=(await allRecords()).filter(row=>isRecordInProject(row,currentProject()));$('homeCount').textContent=`${rows.length} registro${rows.length===1?'':'s'} guardado${rows.length===1?'':'s'}`;
       $('homeLast').textContent=rows[0]?'Último: '+niceDate(rows[0].createdAt):'Sin capturas todavía';}catch(e){toast('No se puede abrir el almacenamiento del móvil',true);}
   }
   async function refreshRecords(){
     clearListURLs();const list=$('recordsList');list.replaceChildren();
+    try{await renderVisitFilter();}catch(error){console.error('Filtro de visitas',error);}
     try{
       const rows=(await allRecords()).filter(row=>isRecordInProject(row,currentProject()));const date=$('dayFilter').value;
-      const visible=modeAll?rows:rows.filter(r=>localDay(r.createdAt)===date);
+      let visible=modeAll?rows:rows.filter(r=>localDay(r.createdAt)===date);
+      const visit=$('visitFilter').value;
+      if(visit==='none')visible=visible.filter(r=>!r.visitId);
+      else if(visit!=='all')visible=visible.filter(r=>r.visitId===visit);
       $('recordsSummary').textContent=modeAll?`${visible.length} registros en total`:`${visible.length} registro(s) del ${date.split('-').reverse().join('/')}`;
       if(!visible.length){const empty=document.createElement('div');empty.className='empty';empty.textContent=modeAll?'Todavía no hay registros guardados.':'No hay fotos ni notas de ese día. Prueba «Ver todos».';list.append(empty);return;}
       for(const row of visible){
@@ -626,7 +728,8 @@
   function navTo(name){
     if(currentView==='editor'&&draft){
       if(recordingStarting||recordingFinalizing||recorder?.state==='recording'){toast('Termina la grabación antes de salir');return;}
-      if(!confirm('Tienes un registro abierto. ¿Salir sin guardar los cambios?'))return;
+      if(!confirm(editing?'Salir sin guardar los cambios?':'¿Salir de la ficha? El borrador quedará guardado.'))return;
+      if(!editing)persistDraft();
       haltSpeech();draft=null;photoQueue=[];editing=false;
     }
     view(name);
@@ -644,7 +747,7 @@
   $('cancelEditor').addEventListener('click',abortDraft);
   $('retryGps').addEventListener('click',acquireGPS);
   $('recordBtn').addEventListener('click',()=>recorder?.state==='recording'?stopRecording():startRecording());
-  $('removeAudio').addEventListener('click',()=>{if(!draft)return;draft.audio=null;draft.audioMime='';setAudioPreview();$('recordingStatus').textContent='Audio quitado de este registro.';});
+  $('removeAudio').addEventListener('click',()=>{if(!draft)return;draft.audio=null;draft.audioMime='';setAudioPreview();scheduleDraftSave();$('recordingStatus').textContent='Audio quitado de este registro.';});
   $('dictateBtn').addEventListener('click',dictate);
   $('descriptionInput').addEventListener('input',()=>{
     // Si el técnico modifica el texto, sus cambios tienen prioridad sobre el micrófono.
@@ -653,6 +756,20 @@
   $('saveRecord').addEventListener('click',save);
   $('deleteRecord').addEventListener('click',del);
   $('saveProfile').addEventListener('click',saveProfile);
+  $('startVisit').addEventListener('click',startVisit);
+  $('endVisit').addEventListener('click',endVisit);
+  $('visitFilter').addEventListener('change',refreshRecords);
+  $('recoverDraft').addEventListener('click',()=>{
+    if(!recoverableDraft)return;
+    const saved=recoverableDraft;
+    recoverableDraft=null;
+    loadEditor(saved,false,false);
+  });
+  $('discardDraft').addEventListener('click',async()=>{
+    if(!confirm('¿Descartar el borrador guardado?'))return;
+    await clearSavedDraft();toast('Borrador descartado');
+  });
+  $('descriptionInput').addEventListener('input',scheduleDraftSave);
   $('refreshCatalog').addEventListener('click',()=>refreshPublicCatalog(true));
   $('homeProject').addEventListener('change',v=>selectProject(v.target.value));
   $('settingsProjectSelect').addEventListener('change',v=>selectProject(v.target.value));
