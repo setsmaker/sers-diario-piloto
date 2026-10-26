@@ -1,39 +1,63 @@
-/* Base de datos local para fotos y audio: sin servicios externos. */
+/* Datos locales SERS: registros, visitas y borrador, con IndexedDB. */
 'use strict';
 const SersDB = (() => {
-  const DB_NAME = 'sers-diario-piloto';
-  const STORE = 'registros';
-  function open() {
-    return new Promise((resolve, reject) => {
-      const r = indexedDB.open(DB_NAME, 1);
-      r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains(STORE)) r.result.createObjectStore(STORE, { keyPath: 'id' }); };
-      r.onsuccess = () => resolve(r.result);
-      r.onerror = () => reject(r.error);
-      r.onblocked = () => reject(new Error('Base de datos bloqueada por otra pestaña'));
+  const DB_NAME='sers-diario-piloto';
+  const STORE='registros', DRAFTS='borradores', VISITS='visitas';
+  function open(){
+    return new Promise((resolve,reject)=>{
+      const request=indexedDB.open(DB_NAME,2);
+      request.onupgradeneeded=()=>{
+        const db=request.result;
+        for(const name of [STORE,DRAFTS,VISITS]){
+          if(!db.objectStoreNames.contains(name))db.createObjectStore(name,{keyPath:'id'});
+        }
+      };
+      request.onsuccess=()=>resolve(request.result);
+      request.onerror=()=>reject(request.error);
+      request.onblocked=()=>reject(new Error('Base de datos bloqueada por otra pestaña'));
     });
   }
-  async function operation(mode, cb) {
-    const db = await open();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, mode);
-      const store = tx.objectStore(STORE);
-      let value;
-      try { value = cb(store); } catch (err) { db.close(); reject(err); return; }
-      tx.oncomplete = () => { db.close(); resolve(value); };
-      tx.onerror = () => { db.close(); reject(tx.error); };
-      tx.onabort = () => { db.close(); reject(tx.error || new Error('Operación cancelada')); };
+  async function run(storeName,mode,action){
+    const db=await open();
+    return new Promise((resolve,reject)=>{
+      let result;
+      const tx=db.transaction(storeName,mode);
+      try{result=action(tx.objectStore(storeName));}
+      catch(e){db.close();reject(e);return;}
+      tx.oncomplete=()=>{db.close();resolve(result);};
+      tx.onerror=()=>{db.close();reject(tx.error);};
+      tx.onabort=()=>{db.close();reject(tx.error||new Error('Operación cancelada'));};
     });
   }
-  async function getAll() {
-    const db = await open();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readonly');
-      const request = tx.objectStore(STORE).getAll();
-      request.onsuccess = () => { const val = request.result; db.close(); resolve(val); };
-      request.onerror = () => { db.close(); reject(request.error); };
+  async function read(name,id){
+    const db=await open();
+    return new Promise((resolve,reject)=>{
+      const tx=db.transaction(name,'readonly'),request=tx.objectStore(name).get(id);
+      request.onsuccess=()=>{resolve(request.result||null);};
+      request.onerror=()=>reject(request.error);
+      tx.oncomplete=()=>db.close();
+      tx.onerror=()=>{db.close();reject(tx.error);};
     });
   }
-  function put(item) { return operation('readwrite', store => {store.put(item);}); }
-  function remove(id) {return operation('readwrite', store => {store.delete(id);});}
-  return { getAll, put, remove };
+  async function readAll(name){
+    const db=await open();
+    return new Promise((resolve,reject)=>{
+      const tx=db.transaction(name,'readonly'),request=tx.objectStore(name).getAll();
+      request.onsuccess=()=>resolve(request.result||[]);
+      request.onerror=()=>reject(request.error);
+      tx.oncomplete=()=>db.close();
+      tx.onerror=()=>{db.close();reject(tx.error);};
+    });
+  }
+  return {
+    getAll:()=>readAll(STORE),
+    put:item=>run(STORE,'readwrite',store=>store.put(item)),
+    remove:id=>run(STORE,'readwrite',store=>store.delete(id)),
+    saveDraft:draft=>run(DRAFTS,'readwrite',store=>store.put({...draft,id:'active'})),
+    getDraft:()=>read(DRAFTS,'active'),
+    clearDraft:()=>run(DRAFTS,'readwrite',store=>store.delete('active')),
+    putVisit:visit=>run(VISITS,'readwrite',store=>store.put(visit)),
+    getVisits:()=>readAll(VISITS),
+    getVisit:id=>read(VISITS,id)
+  };
 })();
