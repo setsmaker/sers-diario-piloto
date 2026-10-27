@@ -386,8 +386,17 @@
       line.append(b,document.createTextNode(value));holder.append(line);
     }
   }
+  function catalogRevision(data){
+    const d=Date.parse(data?.revision||data?.updatedAt||'');
+    return Number.isFinite(d)?d:0;
+  }
   function applyPublicCatalog(data){
     if(!data||!Array.isArray(data.obras))throw new Error('Formato de catálogo inválido');
+    let cached=null;
+    try{cached=JSON.parse(localStorage.getItem(catalogCacheKey)||'null');}catch{}
+    // Una publicación nueva puede tardar en llegar a GitHub Pages:
+    // no sobrescribirla con una copia anterior del mismo catálogo.
+    if(cached&&catalogRevision(cached)>catalogRevision(data))return false;
     const mapped=data.obras.filter(x=>x.activa!==false&&typeof x.nombre==='string'&&
       typeof x.id==='string'&&Array.isArray(x.zonas)&&Array.isArray(x.unidades))
       .map(convertPublicProject);
@@ -397,20 +406,33 @@
       mapped.find(p=>p.name===previous?.name)||mapped[0];
     projects=mapped;activeProjectId=chosen.id;
     localStorage.setItem(catalogCacheKey,JSON.stringify(data));
-    // Las obras compartidas no se editan ni suben desde los móviles.
     localStorage.setItem(activeProjectKey,activeProjectId);
     renderProjectChoices();renderProjectDetail();refreshHome();
     if(currentView==='records')refreshRecords();
+    return true;
   }
+  window.addEventListener('sers:catalog-published',event=>{
+    const next=event.detail?.catalog;
+    if(!next)return;
+    try{
+      applyPublicCatalog(next);
+      if(event.detail?.projectId&&projects.some(p=>p.id===event.detail.projectId)){
+        selectProject(event.detail.projectId);
+      }
+      const status=$('catalogStatus');
+      status.textContent='Última modificación guardada en GitHub. Catálogo local actualizado.';
+    }catch(error){console.error('No se pudo actualizar la vista del catálogo',error);}
+  });
   async function refreshPublicCatalog(manual=false){
     const status=$('catalogStatus');
     try{
       const response=await fetch('./obras.json?t='+Date.now(),{cache:'no-store'});
       if(!response.ok)throw new Error('HTTP '+response.status);
       const data=await response.json();
-      applyPublicCatalog(data);
-      status.textContent='Catálogo actualizado desde GitHub. Disponible sin conexión.';
-      if(manual)toast('Obras actualizadas desde GitHub');
+      const applied=applyPublicCatalog(data);
+      status.textContent=applied?'Catálogo actualizado desde GitHub. Disponible sin conexión.':
+        'La última publicación todavía se está propagando; conservamos la versión más reciente del móvil.';
+      if(manual)toast(applied?'Obras actualizadas desde GitHub':'Ya tienes una versión más reciente en este móvil.');
     }catch(e){
       status.textContent='Sin acceso al catálogo. Se utiliza la última copia local.';
       if(manual)toast('No se pudo descargar el catálogo',true);
