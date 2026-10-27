@@ -43,3 +43,19 @@
 .photo-item textarea{min-height:74px;width:100%;padding:10px;border:2px solid #a3b9ad;border-radius:8px;font-size:16px;line-height:1.4}
 .photo-item textarea:focus{outline:2px solid #80b996}
 .photo-item .filename{padding:0;font-size:12px}
+
+/* Administración de obras: accesible desde móvil y no visible sin autorización */
+.admin-panel{display:block}
+.admin-panel>summary{cursor:pointer;font-size:17px;font-weight:750;color:#24533e;padding:3px 0;list-style-position:inside}
+.admin-panel[open]>summary{margin-bottom:15px;padding-bottom:12px;border-bottom:1px solid #c5d0d2}
+.admin-login,.admin-editor{display:flex;flex-direction:column;gap:12px}
+.admin-panel label{font-size:15px;font-weight:700}
+.admin-panel input,.admin-panel select,.admin-panel textarea{font-size:16px}
+.admin-panel textarea{resize:vertical;min-height:90px}
+.admin-panel .hint{font-size:13px;line-height:1.42;color:#53685a}
+.admin-panel a{color:#235941;text-decoration:underline;font-weight:700}
+.admin-checkbox{display:flex;align-items:flex-start;gap:11px;line-height:1.35;padding:6px 0;cursor:pointer}
+.admin-checkbox input{width:22px;min-width:22px;height:22px;min-height:22px;margin:0;accent-color:#397558}
+.admin-editor .inline-controls{justify-content:space-between}
+#adminStatus{min-height:1.2em;margin:12px 0 0}
+#adminStatus.admin-error{color:#962d36;font-weight:650}
