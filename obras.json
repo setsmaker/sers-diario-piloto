@@ -42,7 +42,29 @@
         "Otros"
       ],
       "activa": true
+    },
+    {
+      "id": "linea-mt-parque-equipado",
+      "nombre": "Línea MT Parque Equipado",
+      "codigo": "Z0000404",
+      "promotor": "Zaragoza Alta Velocidad",
+      "contratista": "Indutec",
+      "zonas": [
+        "Fray José Casanova",
+        "Parque",
+        "Calzada",
+        "San José María Escriba de Balaguer"
+      ],
+      "unidades": [
+        "Tierras",
+        "Tubos",
+        "Cruces",
+        "Asfaltos",
+        "Protecciones",
+        "Conexiones"
+      ],
+      "activa": true
     }
   ],
-  "revision": "2026-10-27T05:35:16.072Z"
+  "revision": "2026-10-27T05:37:53.968Z"
 }
