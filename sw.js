@@ -1,6 +1,6 @@
 'use strict';
-const CACHE='sers-diario-v7-obras-y-visitas';
-const SHELL=['./','./index.html','./styles.css','./db.js','./zip.js','./app.js',
+const CACHE='sers-diario-v8-administracion-obras';
+const SHELL=['./','./index.html','./styles.css','./db.js','./zip.js','./app.js','./admin.js',
   './obras.json','./manifest.webmanifest','./manifest-sers.webmanifest',
   './icons/icon-192.png','./icons/icon-512.png'];
 self.addEventListener('install',event=>{
