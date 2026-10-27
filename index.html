@@ -88,8 +88,45 @@
           <p id="catalogStatus" class="status-small"></p>
           <button id="refreshCatalog" type="button" class="button button-outline full">↻ Actualizar catálogo</button>
           <div id="projectDetail" class="project-detail"></div>
-          <p class="hint">Para añadir o cambiar una obra, comunícalo al administrador. No introduzcas datos reservados en el catálogo público de GitHub.</p>
+          <p class="hint">Los inspectores consultan las obras. El administrador autorizado puede editarlas desde el apartado siguiente.</p>
         </div>
+        <details class="sheet admin-panel" id="adminDetails">
+          <summary>Administrar obras en GitHub</summary>
+          <div id="adminLogin" class="admin-login">
+            <p class="hint">Solo para el administrador de la cuenta GitHub <strong>setsmaker</strong>. Las modificaciones se publican en el catálogo compartido.</p>
+            <p class="hint">La primera vez, crea en GitHub un <strong>token de acceso específico</strong> con permiso de <strong>Contents: Read and write</strong> únicamente para <strong>setsmaker/sers-diario-piloto</strong>. Utiliza una caducidad corta. <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">Crear token en GitHub ↗</a></p>
+            <label for="adminToken">Token de GitHub (no es tu contraseña)</label>
+            <input id="adminToken" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Pega el token aquí">
+            <button id="adminUnlock" class="button button-primary full" type="button">Acceder como administrador</button>
+            <p class="hint">El token se utiliza directamente con api.github.com y <strong>no se guarda</strong> en el móvil, ni se sube al catálogo. No lo compartas por chat.</p>
+          </div>
+          <div id="adminEditor" class="admin-editor hidden">
+            <div class="inline-controls">
+              <strong id="adminIdentity">Administrador conectado</strong>
+              <button id="adminLogout" type="button" class="button button-outline button-small">Cerrar acceso</button>
+            </div>
+            <label for="adminProjectSelect">Obra a gestionar</label>
+            <select id="adminProjectSelect"></select>
+            <label for="adminName">Nombre de la obra</label>
+            <input id="adminName" type="text" maxlength="120" placeholder="Nombre visible">
+            <label for="adminCode">Código / expediente (opcional)</label>
+            <input id="adminCode" type="text" maxlength="80">
+            <label for="adminPromoter">Promotor (opcional y público)</label>
+            <input id="adminPromoter" type="text" maxlength="120">
+            <label for="adminContractor">Contratista (opcional y público)</label>
+            <input id="adminContractor" type="text" maxlength="120">
+            <label for="adminZones">Zonas de obra</label>
+            <textarea id="adminZones" rows="6" placeholder="Una zona por línea"></textarea>
+            <label for="adminUnits">Unidades / trabajos</label>
+            <textarea id="adminUnits" rows="6" placeholder="Una unidad por línea"></textarea>
+            <label class="admin-checkbox"><input id="adminActive" type="checkbox" checked> Obra activa (mostrar a los inspectores)</label>
+            <label class="admin-checkbox"><input id="adminPublicConfirm" type="checkbox"> Confirmo que esta información puede publicarse en GitHub Pages.</label>
+            <button id="adminSave" type="button" class="button button-primary full">Guardar y publicar en GitHub</button>
+            <button id="adminReload" type="button" class="button button-outline full">Recargar catálogo desde GitHub</button>
+            <p class="hint">Al archivar una obra deja de aparecer en el selector, pero sus registros locales no se borran. Publicar puede tardar unos instantes en propagarse a otros móviles.</p>
+          </div>
+          <p id="adminStatus" class="status-small" role="status" aria-live="polite"></p>
+        </details>
         <div class="sheet">
           <h2>Exportar al ordenador</h2>
           <p>Descarga un ZIP con fotografías originales, audios, descripciones, ubicaciones, fechas y un CSV para Excel.</p>
@@ -188,5 +225,6 @@
   <script src="./db.js" defer></script>
   <script src="./zip.js" defer></script>
   <script src="./app.js" defer></script>
+  <script src="./admin.js" defer></script>
 </body>
 </html>
