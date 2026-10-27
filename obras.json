@@ -13,9 +13,18 @@
         "Parque Central"
       ],
       "unidades": [
+        "Demoliciones",
+        "Tierras",
         "Pavimentación",
         "Saneamiento",
-        "Alumbrado"
+        "Alumbrado",
+        "Abastecimiento",
+        "Gas",
+        "Electricidad",
+        "Plantaciones",
+        "Semaforizacion",
+        "Mobiliario",
+        "Andenes"
       ],
       "activa": true,
       "promotor": "Zaragoza Alta Velocidad",
@@ -66,5 +75,5 @@
       "activa": true
     }
   ],
-  "revision": "2026-10-27T05:37:53.968Z"
+  "revision": "2026-10-27T20:10:56.321Z"
 }
