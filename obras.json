@@ -5,8 +5,8 @@
   "obras": [
     {
       "id": "portillo-e19",
-      "nombre": "Portillo · Urbanización E-19",
-      "codigo": "",
+      "nombre": "Portillo Urbanización E-19",
+      "codigo": "Z0000373",
       "zonas": [
         "Anselmo Clavé",
         "Escoriaza y Fabro",
@@ -17,7 +17,9 @@
         "Saneamiento",
         "Alumbrado"
       ],
-      "activa": true
+      "activa": true,
+      "promotor": "Zaragoza Alta Velocidad",
+      "contratista": "UTE ACCIONA-COPHA"
     },
     {
       "id": "nuevo-acceso-plaza-calle-turiaso",
@@ -42,5 +44,5 @@
       "activa": true
     }
   ],
-  "revision": "2026-10-27T05:33:24.074Z"
+  "revision": "2026-10-27T05:35:16.072Z"
 }
