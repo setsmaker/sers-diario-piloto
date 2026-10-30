@@ -128,6 +128,31 @@
           <p id="adminStatus" class="status-small" role="status" aria-live="polite"></p>
         </details>
         <div class="sheet">
+          <h2>Sincronizar con OneDrive</h2>
+          <p class="hint">Envía los registros nuevos de las obras de este móvil a carpetas privadas de tu OneDrive, por obra, fecha y visita. Los originales permanecen en el teléfono.</p>
+          <p id="onedriveStatus" class="status-small" role="status" aria-live="polite">OneDrive sin configurar.</p>
+          <div id="onedriveSetup">
+            <details id="onedriveSetupDetails">
+              <summary>Configuración de Microsoft (una vez)</summary>
+              <p class="hint">Para conectar SERS Diario hace falta registrar la aplicación en Microsoft Entra y autorizarla. No basta con iniciar sesión en la aplicación OneDrive del móvil.</p>
+              <label for="onedriveClientId">ID de aplicación de Microsoft (Client ID)</label>
+              <input id="onedriveClientId" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+              <p class="hint">URI de redirección que debes registrar como aplicación de página única (SPA):</p>
+              <input id="onedriveRedirect" type="text" readonly value="https://setsmaker.github.io/sers-diario-piloto/" aria-label="URI de redirección">
+              <button id="onedriveSaveSettings" type="button" class="button button-outline full">Guardar configuración</button>
+              <p class="hint">Permisos de Microsoft Graph: <strong>Files.ReadWrite</strong> y <strong>User.Read</strong>. No introduzcas Client Secret ni contraseñas aquí.</p>
+            </details>
+          </div>
+          <div class="inline-controls onedrive-actions">
+            <button id="onedriveConnect" type="button" class="button button-outline">Conectar OneDrive</button>
+            <button id="onedriveDisconnect" type="button" class="button button-outline hidden">Desconectar</button>
+          </div>
+          <label class="admin-checkbox"><input id="onedriveAuto" type="checkbox"> Sincronizar automáticamente al abrir la aplicación, al recuperar conexión y después de guardar registros (mientras la aplicación esté abierta).</label>
+          <button id="onedriveSync" type="button" class="button button-primary full">☁ Sincronizar registros pendientes</button>
+          <p id="onedriveProgress" class="hint" role="status" aria-live="polite"></p>
+          <p class="hint">Destino: <strong>DIARIOS DE OBRA / Obra / Fecha / Visita o sin visita</strong>. Si un registro ya existe y no ha cambiado, no se vuelve a subir. Si se modifica, se actualiza. Las carpetas se crean solas.</p>
+        </div>
+        <div class="sheet">
           <h2>Exportar al ordenador</h2>
           <p>Descarga un ZIP con fotografías originales, audios, descripciones, ubicaciones, fechas y un CSV para Excel.</p>
           <button id="exportDay" type="button" class="button button-primary full">Exportar el día seleccionado</button>
@@ -224,7 +249,9 @@
   </div>
   <script src="./db.js" defer></script>
   <script src="./zip.js" defer></script>
+  <script src="https://alcdn.msftauth.net/browser/2.35.0/js/msal-browser.min.js" integrity="sha384-PARf28kmic36Ve+O3DnUerRXFtOQ7ZDqRDGpLcbljly5/N39T2OV3kt3QsWOKeAX" crossorigin="anonymous" defer></script>
   <script src="./app.js" defer></script>
+  <script src="./onedrive.js" defer></script>
   <script src="./admin.js" defer></script>
 </body>
 </html>
