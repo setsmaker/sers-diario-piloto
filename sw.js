@@ -1,6 +1,6 @@
 'use strict';
-const CACHE='sers-diario-v8-administracion-obras';
-const SHELL=['./','./index.html','./styles.css','./db.js','./zip.js','./app.js','./admin.js',
+const CACHE='sers-diario-v9-onedrive-sync';
+const SHELL=['./','./index.html','./styles.css','./db.js','./zip.js','./app.js','./admin.js','./onedrive.js',
   './obras.json','./manifest.webmanifest','./manifest-sers.webmanifest',
   './icons/icon-192.png','./icons/icon-512.png'];
 self.addEventListener('install',event=>{
