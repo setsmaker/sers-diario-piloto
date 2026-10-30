@@ -636,6 +636,10 @@
     try{
       // El estado GPS textual es solo de interfaz; no hace falta incluirlo en datos exportados.
       await SersDB.put({...draft,gpsMessage:undefined});
+      // Informa al módulo OneDrive. El guardado local nunca depende de la red.
+      window.dispatchEvent(new CustomEvent('sers:record-saved',{detail:{
+        id:draft.id,projectId:draft.projectId,updatedAt:draft.updatedAt
+      }}));
       if(!editing){
         lastChoices[draft.projectId||activeProjectId]={
           zones:[...pickerSelection.zone],works:[...pickerSelection.work]
