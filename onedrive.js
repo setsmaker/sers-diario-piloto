@@ -142,7 +142,9 @@
     return [];
   }
   function projectOf(record,projects){
-    return projects.find(p=>p.id===record.projectId)||projects.find(p=>p.nombre===record.project);
+    const shared=projects.find(p=>p.id===record.projectId)||projects.find(p=>p.nombre===record.project);
+    // Registros antiguos pueden pertenecer a obras locales archivadas; no perderlos.
+    return shared||{id:record.projectId||'obra_antigua',nombre:record.project||'Obra sin nombre'};
   }
   async function rootFolder(){
     const root=await graph('/me/drive/root?$select=id');
@@ -243,8 +245,9 @@
     files.push({name:'LEEME.txt',data:'SERS Diario de obra. Información original del registro.\r\nNo contiene redacción generada mediante IA.\r\n'});
     return SersZip.create(files);
   }
-  function versionOf(record){
-    return record.updatedAt||record.createdAt||'sin_fecha';
+  function versionOf(record,visit){
+    return (record.updatedAt||record.createdAt||'sin_fecha')+'|'+
+      (visit?.finishedAt||'visita_abierta');
   }
   function ledgerKey(record){
     const owner=account?.homeAccountId||account?.username||'desconocido';
@@ -263,12 +266,13 @@
     const name='REGISTRO_'+safeName(record.id,110)+'.zip';
     const current=ledger[ledgerKey(record)];
     const remote=await remoteFile(folder,name);
-    const sameVersion=current?.version===versionOf(record)&&current?.name===name;
+    const version=versionOf(record,visit);
+    const sameVersion=current?.version===version&&current?.name===name;
     if(remote&&(sameVersion||!current)){
       // Si ya existe, por defecto no duplicar ni sobrescribir sin constancia
       // de un cambio posterior hecho en este móvil.
       if(!current){
-        ledger[ledgerKey(record)]={version:versionOf(record),name,
+        ledger[ledgerKey(record)]={version,name,
           syncedAt:new Date().toISOString(),remoteId:remote.id,discovered:true};
         savedLedger();
       }
@@ -277,7 +281,7 @@
     const blob=await buildZip(record,visit);
     const sent=await uploadFile(folder,name,blob);
     if(!sent?.id)throw new Error('OneDrive no confirmó el archivo «'+name+'».');
-    ledger[ledgerKey(record)]={version:versionOf(record),name,
+    ledger[ledgerKey(record)]={version,name,
       syncedAt:new Date().toISOString(),remoteId:sent.id};
     savedLedger();
     return {uploaded:true};
