@@ -5,15 +5,17 @@
 (() => {
   const $ = id => document.getElementById(id);
   const CLIENT_KEY='sers-diario-onedrive-client-id-v1';
+  const TENANT_KEY='sers-diario-onedrive-tenant-v1';
   const AUTO_KEY='sers-diario-onedrive-auto-v1';
   const LEDGER_KEY='sers-diario-onedrive-ledger-v1';
   const GRAPH='https://graph.microsoft.com/v1.0';
   const REDIRECT='https://setsmaker.github.io/sers-diario-piloto/';
   const SCOPES=['User.Read','Files.ReadWrite'];
-  let clientId='',client=null,account=null,driveId='',busy=false,folderCache=new Map(),ledger={};
-  try{clientId=localStorage.getItem(CLIENT_KEY)||'';}catch{}
+  let clientId='',tenantId='',client=null,account=null,driveId='',busy=false,folderCache=new Map(),ledger={};
+  try{clientId=localStorage.getItem(CLIENT_KEY)||'';tenantId=localStorage.getItem(TENANT_KEY)||'';}catch{}
   try{ledger=JSON.parse(localStorage.getItem(LEDGER_KEY)||'{}')||{};}catch{}
   $('onedriveClientId').value=clientId;
+  $('onedriveTenantId').value=tenantId;
   $('onedriveRedirect').value=REDIRECT;
   $('onedriveAuto').checked=localStorage.getItem(AUTO_KEY)==='yes';
   const status=(message,error=false)=>{
@@ -45,14 +47,19 @@
   }
   function saveConfig(){
     const input=$('onedriveClientId').value.trim();
+    const newTenant=$('onedriveTenantId').value.trim();
     if(input&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input)){
       status('El ID de aplicación debe tener el formato de un GUID de Microsoft.',true);
       return;
     }
     if(!input){status('Introduce el ID de aplicación que te facilite Microsoft Entra.',true);return;}
-    if(input!==clientId){
-      clientId=input;
+    if(newTenant&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(newTenant)){
+      status('El Tenant ID debe tener el formato de un identificador GUID de Microsoft.',true);return;
+    }
+    if(input!==clientId||newTenant!==tenantId){
+      clientId=input;tenantId=newTenant;
       localStorage.setItem(CLIENT_KEY,clientId);
+      localStorage.setItem(TENANT_KEY,tenantId);
       client=null;account=null;driveId='';folderCache.clear();
       status('ID guardado. Pulsa «Conectar OneDrive».');
     }else status('Configuración guardada. Ya puedes conectar OneDrive.');
@@ -64,7 +71,7 @@
     if(!clientId)throw new Error('Falta el ID de aplicación de Microsoft. Abre «Configuración de Microsoft».');
     if(!window.msal?.PublicClientApplication)throw new Error('No se pudo cargar la biblioteca oficial MSAL de Microsoft. Comprueba la conexión.');
     client=new window.msal.PublicClientApplication({
-      auth:{clientId,authority:'https://login.microsoftonline.com/common',
+      auth:{clientId,authority:'https://login.microsoftonline.com/'+(tenantId||'common'),
         redirectUri:REDIRECT,navigateToLoginRequestUrl:false},
       cache:{cacheLocation:'localStorage',storeAuthStateInCookie:false}
     });
