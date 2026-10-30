@@ -6,7 +6,7 @@
 
 1. Abrir [Centro de administración de Microsoft Entra](https://entra.microsoft.com/) → **Identity** → **Applications** → **App registrations** → **New registration**.
 2. Nombre: `SERS Diario de Obra`.
-3. Tipos de cuenta: para una prueba con OneDrive personal y corporativo, seleccionar **Accounts in any organizational directory and personal Microsoft accounts**. Si la organización solo permite cuentas corporativas, seleccionar el tipo que autorice el administrador de Microsoft 365. La configuración del sincronizador usa la autoridad `common`; si se restringe a un tenant, habrá que adaptar ese valor.
+3. Tipos de cuenta: para una prueba que admita OneDrive personal y corporativo, seleccionar **Accounts in any organizational directory and personal Microsoft accounts**. Si SERS registra una aplicación limitada a su propia organización, seleccionar **Single tenant** y copiar también el **Directory (tenant) ID**; SERS Diario tiene un campo opcional para introducir ese valor.
 4. Registrar la aplicación. Copiar **Application (client) ID**. Es un identificador público, **no es un Client Secret**.
 5. En **Authentication** → **Add a platform** → **Single-page application (SPA)**, añadir exactamente:
    `https://setsmaker.github.io/sers-diario-piloto/`
@@ -15,7 +15,7 @@
    - `User.Read`
    - `Files.ReadWrite`
    El administrador de Microsoft 365 puede necesitar autorizar el consentimiento en el tenant.
-7. En SERS Diario (móvil), entrar en **Ajustes / ZIP → Sincronizar con OneDrive → Configuración de Microsoft (una vez)**, pegar el **Client ID**, guardar, pulsar **Conectar OneDrive** e iniciar sesión con la cuenta que deba ser el destino.
+7. En SERS Diario (móvil), entrar en **Ajustes / ZIP → Sincronizar con OneDrive → Configuración de Microsoft (una vez)**, pegar el **Client ID** y, solo para aplicaciones *Single tenant*, también el **Tenant ID**. Guardar, pulsar **Conectar OneDrive** e iniciar sesión con la cuenta que deba ser el destino.
 8. Probar primero con una **nota ficticia**, pulsando «Sincronizar registros pendientes». Comprobar en OneDrive la carpeta **DIARIOS DE OBRA**.
 
 No guardar Client Secrets en el repositorio ni introducirlos en la PWA. La autenticación se gestiona con MSAL y OAuth para SPA. El navegador conserva la sesión de Microsoft mediante su almacenamiento local. El usuario puede desconectar OneDrive desde los ajustes.
