@@ -137,6 +137,9 @@
               <p class="hint">Para conectar SERS Diario hace falta registrar la aplicación en Microsoft Entra y autorizarla. No basta con iniciar sesión en la aplicación OneDrive del móvil.</p>
               <label for="onedriveClientId">ID de aplicación de Microsoft (Client ID)</label>
               <input id="onedriveClientId" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+              <label for="onedriveTenantId">ID del directorio / Tenant (opcional)</label>
+              <input id="onedriveTenantId" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Solo si Microsoft 365 usa una aplicación de una sola organización">
+              <p class="hint">Deja el Tenant vacío si tu aplicación admite cuentas corporativas y personales. Si Microsoft 365 utiliza una aplicación de una sola organización, introduce el ID del directorio facilitado por su administrador.</p>
               <p class="hint">URI de redirección que debes registrar como aplicación de página única (SPA):</p>
               <input id="onedriveRedirect" type="text" readonly value="https://setsmaker.github.io/sers-diario-piloto/" aria-label="URI de redirección">
               <button id="onedriveSaveSettings" type="button" class="button button-outline full">Guardar configuración</button>
