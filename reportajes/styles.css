@@ -25,3 +25,8 @@ h1,h2,p{margin:0}.eyebrow{font-size:12px;color:var(--accent);font-weight:800;let
 .report-actions button.text-report-action{background:#e8f1eb;color:#326549;font-weight:650;font-size:12px;padding:5px 8px;min-height:30px}
 .report-actions button{white-space:nowrap}
 @media(max-width:380px){.report-row{grid-template-columns:1fr;}.report-actions{flex-direction:row;flex-wrap:wrap}.report-actions button{flex:1}}
+
+.photo-location-info{border-radius:10px;padding:9px 11px;margin:0 0 12px;background:#edf1ed;border:1px solid #d4ded5;font-weight:650;color:#30523a}
+.photo-location-info.good{background:#e1f5e9;border-color:#88c69d}
+.photo-location-info.warning{background:#fff6de;border-color:#efc56d}
+.photo-location-info.bad{background:#ffebe6;border-color:#eeb3a6}
