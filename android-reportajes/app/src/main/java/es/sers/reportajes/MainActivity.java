@@ -2,6 +2,7 @@ package es.sers.reportajes;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.ClipData;
 import android.content.ActivityNotFoundException;
 import android.content.ContentValues;
 import android.content.Intent;
@@ -59,6 +60,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     private Uri exportUri;
     private OutputStream exportStream;
     private String exportName;
+    private boolean exportIsShare = false;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -277,6 +279,7 @@ public class MainActivity extends Activity implements SensorEventListener {
 
         @JavascriptInterface public synchronized boolean beginZip(String filename) {
             finishExportQuietly();
+            exportIsShare = false;
             exportName = filename.replaceAll("[^a-zA-Z0-9._-]", "_");
             if (!exportName.endsWith(".zip")) exportName += ".zip";
             try {
@@ -303,6 +306,29 @@ public class MainActivity extends Activity implements SensorEventListener {
                 return false;
             }
         }
+        /**
+         * Crea ZIP temporal privado, compartido mediante FileProvider. No usa
+         * claves de Microsoft ni expone carpetas privadas a otras aplicaciones.
+         */
+        @JavascriptInterface public synchronized boolean beginShareZip(String filename) {
+            finishExportQuietly();
+            exportIsShare = true;
+            exportName = filename.replaceAll("[^a-zA-Z0-9._-]", "_");
+            if (!exportName.endsWith(".zip")) exportName += ".zip";
+            try {
+                File dir = new File(getCacheDir(), "share");
+                if (!dir.exists() && !dir.mkdirs()) throw new IllegalStateException("No se pudo preparar el archivo.");
+                File archive = new File(dir, exportName);
+                exportUri = FileProvider.getUriForFile(MainActivity.this,
+                    getPackageName() + ".fileprovider", archive);
+                exportStream = new FileOutputStream(archive, false);
+                return true;
+            } catch (Exception error) {
+                finishExportQuietly();
+                toast("No se pudo preparar el envío: " + error.getMessage());
+                return false;
+            }
+        }
         @JavascriptInterface public synchronized boolean appendZipChunk(String base64) {
             if (exportStream == null) return false;
             try {
@@ -316,6 +342,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         }
         @JavascriptInterface public synchronized boolean finishZip() {
             try {
+                if (exportIsShare) throw new IllegalStateException("El archivo debe enviarse con Compartir.");
                 if (exportStream == null) throw new IllegalStateException("Descarga no iniciada.");
                 exportStream.flush();finishExportQuietly();
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && exportUri != null) {
@@ -326,6 +353,41 @@ public class MainActivity extends Activity implements SensorEventListener {
                 toast("ZIP guardado en Descargas / SERS_Reportajes");
                 return true;
             } catch (Exception e) { toast("Error cerrando ZIP: " + e.getMessage()); return false; }
+        }
+        @JavascriptInterface public synchronized boolean finishShareZip() {
+            try {
+                if (!exportIsShare || exportStream == null || exportUri == null)
+                    throw new IllegalStateException("No hay un archivo pendiente de compartir.");
+                exportStream.flush();
+                finishExportQuietly();
+                Uri attachment = exportUri;
+                ui.post(() -> {
+                    Intent send = new Intent(Intent.ACTION_SEND);
+                    send.setType("application/zip");
+                    send.putExtra(Intent.EXTRA_STREAM, attachment);
+                    send.setClipData(ClipData.newUri(getContentResolver(), "Reportaje SERS", attachment));
+                    send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    try {
+                        // Preferir OneDrive si acepta archivos ZIP.
+                        Intent oneDrive = new Intent(send);
+                        oneDrive.setPackage("com.microsoft.skydrive");
+                        startActivity(oneDrive);
+                    } catch (ActivityNotFoundException | SecurityException oneDriveUnavailable) {
+                        try {
+                            Intent chooser = Intent.createChooser(send, "Enviar reportaje a OneDrive");
+                            chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                            startActivity(chooser);
+                        } catch (Exception error) {
+                            toast("No se pudo abrir OneDrive. Comprueba que está instalada.");
+                        }
+                    }
+                });
+                return true;
+            } catch (Exception e) {
+                finishExportQuietly();
+                toast("Error al compartir ZIP: " + e.getMessage());
+                return false;
+            }
         }
     }
 
