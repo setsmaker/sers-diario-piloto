@@ -102,6 +102,46 @@
    message('Reportaje creado. Ya puedes hacer fotografías.');
   }catch(error){console.error(error);message('No se pudo crear el reportaje en este móvil.');}
  }
+ async function importReport(event){
+  const zip=event.target.files?.[0];
+  event.target.value='';
+  if(!zip)return;
+  if(!window.SersImport&&typeof SersImport==='undefined'){
+   message('No se ha cargado el importador de reportajes.');return;
+  }
+  const button=$('importReportBtn');
+  button.disabled=true;button.textContent='Importando reportaje…';
+  try{
+   const imported=await SersImport.load(zip);
+   const existing=await ReportDB.getReport(imported.report.id);
+   if(existing&&!confirm('Ya existe este reportaje. ¿Importar solo las fotografías que falten?')){
+    return;
+   }
+   // Cada foto tiene un identificador estable. No sobrescribir correcciones
+   // posteriores realizadas en este dispositivo.
+   const oldPhotos=existing?await ReportDB.photosByReport(imported.report.id):[];
+   const known=new Set(oldPhotos.map(p=>p.id));
+   let added=0;
+   for(const p of imported.photos){
+    if(known.has(p.id))continue;
+    await ReportDB.savePhoto(p);added++;
+   }
+   const report=existing||imported.report;
+   const all=await ReportDB.photosByReport(report.id);
+   report.photoCount=all.length;
+   if(!existing)report.updatedAt=now();
+   else if(added)report.updatedAt=now();
+   await ReportDB.saveReport(report);
+   await reload();
+   renderHome();
+   message('Reportaje importado: '+added+' fotografías recuperadas.');
+  }catch(e){
+   console.error('Error importando ZIP',e);
+   message('No se pudo importar: '+String(e.message||e).slice(0,110));
+  }finally{
+   button.disabled=false;button.textContent='↑ Importar reportaje desde ZIP';
+  }
+ }
  async function selectReport(id,page='capture'){
   if(draft?.file&&draft.reportId!==id){
    await saveDraftNow();
@@ -566,6 +606,8 @@
   }catch(e){console.error(e);message('No se pudo abrir el almacenamiento del móvil.');}
  }
  $('createReport').addEventListener('click',createReport);
+ $('importReportBtn').addEventListener('click',()=>$('importZipInput').click());
+ $('importZipInput').addEventListener('change',importReport);
  $('resumeRecent').addEventListener('click',()=>reports[0]&&selectReport(reports[0].id,reports[0].closedAt?'gallery':'capture'));
  for(const name of ['home','capture','gallery','map']){
   $('nav'+name[0].toUpperCase()+name.slice(1)).addEventListener('click',()=>chooseView(name));
