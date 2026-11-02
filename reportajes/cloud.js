@@ -43,7 +43,7 @@
   client=new msal.PublicClientApplication({
    auth:{clientId,authority:'https://login.microsoftonline.com/'+(tenantId||'common'),
     redirectUri:REDIRECT,navigateToLoginRequestUrl:false},
-   cache:{cacheLocation:'localStorage',storeAuthStateInCookie:false}
+   cache:{cacheLocation:'sessionStorage',storeAuthStateInCookie:false}
   });
   return client;
  }
