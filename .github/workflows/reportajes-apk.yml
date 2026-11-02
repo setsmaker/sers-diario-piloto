@@ -1,0 +1,72 @@
+name: SERS Reportajes · APK Android
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'android-reportajes/**'
+      - 'reportajes/**'
+      - 'zip.js'
+      - 'icons/**'
+      - '.github/workflows/reportajes-apk.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar fuentes
+        uses: actions/checkout@v4
+      - name: Preparar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Instalar herramientas Android
+        shell: bash
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -maxdepth 3 -type f -name sdkmanager | head -n 1)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+      - name: Preparar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Empaquetar web de Reportajes dentro de la APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          ASSETS="android-reportajes/app/src/main/assets/web"
+          mkdir -p "$ASSETS/reportajes" "$ASSETS/icons" android-reportajes/app/src/main/res/drawable-nodpi
+          cp reportajes/index.html reportajes/styles.css reportajes/db.js reportajes/app.js \
+            reportajes/cloud.js reportajes/sw.js reportajes/manifest.webmanifest "$ASSETS/reportajes/"
+          cp zip.js "$ASSETS/zip.js"
+          cp icons/icon-192.png icons/icon-512.png "$ASSETS/icons/"
+          cp icons/icon-192.png android-reportajes/app/src/main/res/drawable-nodpi/ic_launcher.png
+      - name: Compilar APK
+        run: gradle -p android-reportajes --no-daemon assembleDebug
+      - name: Preparar APK con nombre de instalación
+        run: |
+          mkdir -p dist
+          cp android-reportajes/app/build/outputs/apk/debug/app-debug.apk dist/SERS_Reportajes_v1.apk
+          test -s dist/SERS_Reportajes_v1.apk
+      - name: Adjuntar APK a GitHub Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: SERS-Reportajes-APK
+          path: dist/SERS_Reportajes_v1.apk
+      - name: Publicar APK de prueba en GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="sers-reportajes-v1"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/SERS_Reportajes_v1.apk --clobber
+          else
+            gh release create "$TAG" dist/SERS_Reportajes_v1.apk \
+              --title "SERS Reportajes · APK de prueba v1" \
+              --notes "APK Android independiente del Diario de Obra. Captura de fotos, GPS, brújula, dictado, galería, mapa y ZIP. OneDrive requiere completar la autorización Microsoft y adaptación de acceso nativo. Proyecto de prueba: no usar con datos confidenciales hasta validar seguridad."
+          fi
