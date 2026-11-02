@@ -152,8 +152,8 @@ public class MainActivity extends Activity implements SensorEventListener {
                         captureUri = null;
                         Intent choose = new Intent(Intent.ACTION_GET_CONTENT);
                         choose.addCategory(Intent.CATEGORY_OPENABLE);
-                        choose.setType("image/*");
-                        startActivityForResult(Intent.createChooser(choose, "Elegir fotografía"), FILE_REQUEST);
+                        choose.setType(image ? "image/*" : "*/*");
+                        startActivityForResult(Intent.createChooser(choose, image ? "Elegir fotografía" : "Elegir archivo"), FILE_REQUEST);
                     }
                     return true;
                 } catch (Exception error) {
