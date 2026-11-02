@@ -272,6 +272,11 @@
  }
  function startDictation(){
   if(!draft?.file){message('Haz primero una fotografía.');return;}
+  if(window.SersAndroid?.startVoiceInput){
+   window.SersAndroid.startVoiceInput();
+   $('dictateStatus').textContent='Dictado de Android abierto…';
+   return;
+  }
   if(dictation){dictation.stop();return;}
   const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SpeechRecognition){message('El dictado no está disponible. Usa el micrófono del teclado.');return;}
@@ -302,6 +307,20 @@
    $('dictateStatus').textContent='Escuchando…';
   }catch(e){message('No se pudo iniciar el dictado.');}
  }
+ window.addEventListener('sers-native-dictation',event=>{
+  if(!draft?.file||!event.detail?.text)return;
+  const box=$('photoDescription');
+  box.value=(box.value.trim()?box.value.trim()+' ':'')+event.detail.text.trim();
+  draft.description=box.value;scheduleDraft();
+  $('dictateStatus').textContent='Dictado incorporado. Puedes corregirlo antes de guardar.';
+ });
+ window.addEventListener('sers-native-heading',event=>{
+  const degrees=Number(event.detail?.degrees);
+  if(!Number.isFinite(degrees))return;
+  heading={degrees:((degrees%360)+360)%360,method:'android-rotation-vector-camara-trasera-aproximada',
+   time:now(),estimated:true};
+  if(currentView==='capture')updateSensors();
+ });
  function stopDictation(){
   if(!dictation)return Promise.resolve();
   const current=dictation;
@@ -446,10 +465,23 @@
     tipo:report.type,creado:report.createdAt,actualizado:report.updatedAt,
     cerrado:report.closedAt,numero_fotos:images.length},null,2)});
    const blob=await SersZip.create(files);
-   const u=URL.createObjectURL(blob),link=doc('a');
-   link.href=u;link.download='SERS_REPORTAJE_'+clean(report.name)+'_'+today()+'.zip';
-   document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(u),60000);
-   message('ZIP preparado. Revisa Descargas.');
+   const filename='SERS_REPORTAJE_'+clean(report.name)+'_'+today()+'.zip';
+   if(window.SersAndroid?.beginZip){
+    if(!window.SersAndroid.beginZip(filename))throw new Error('Android no pudo preparar el archivo ZIP.');
+    for(let offset=0;offset<blob.size;offset+=128*1024){
+     const part=new Uint8Array(await blob.slice(offset,offset+128*1024).arrayBuffer());
+     let binary='';
+     for(let k=0;k<part.length;k+=8192)binary+=String.fromCharCode(...part.subarray(k,k+8192));
+     if(!window.SersAndroid.appendZipChunk(btoa(binary)))throw new Error('Error al escribir el ZIP en Android.');
+    }
+    if(!window.SersAndroid.finishZip())throw new Error('Android no pudo finalizar el ZIP.');
+    message('ZIP guardado en Descargas / SERS_Reportajes.');
+   }else{
+    const u=URL.createObjectURL(blob),link=doc('a');
+    link.href=u;link.download=filename;
+    document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(u),60000);
+    message('ZIP preparado. Revisa Descargas.');
+   }
   }catch(e){console.error(e);message('No se pudo exportar. Revisa el espacio libre.');}
   finally{button.disabled=false;}
  }
