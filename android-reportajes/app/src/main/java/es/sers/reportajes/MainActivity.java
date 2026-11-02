@@ -275,7 +275,7 @@ public class MainActivity extends Activity implements SensorEventListener {
             });
         }
 
-        @JavascriptInterface public synchronized void beginZip(String filename) {
+        @JavascriptInterface public synchronized boolean beginZip(String filename) {
             finishExportQuietly();
             exportName = filename.replaceAll("[^a-zA-Z0-9._-]", "_");
             if (!exportName.endsWith(".zip")) exportName += ".zip";
@@ -296,21 +296,25 @@ public class MainActivity extends Activity implements SensorEventListener {
                     exportStream = new FileOutputStream(new File(dir, exportName));
                 }
                 if (exportStream == null) throw new IllegalStateException("No se pudo abrir el ZIP.");
+                return true;
             } catch (Exception e) {
                 finishExportQuietly();
                 toast("No se pudo guardar el ZIP: " + e.getMessage());
+                return false;
             }
         }
-        @JavascriptInterface public synchronized void appendZipChunk(String base64) {
-            if (exportStream == null) return;
+        @JavascriptInterface public synchronized boolean appendZipChunk(String base64) {
+            if (exportStream == null) return false;
             try {
                 exportStream.write(Base64.decode(base64, Base64.DEFAULT));
+                return true;
             } catch (Exception e) {
                 finishExportQuietly();
                 toast("Error al guardar el ZIP.");
+                return false;
             }
         }
-        @JavascriptInterface public synchronized void finishZip() {
+        @JavascriptInterface public synchronized boolean finishZip() {
             try {
                 if (exportStream == null) throw new IllegalStateException("Descarga no iniciada.");
                 exportStream.flush();finishExportQuietly();
@@ -320,7 +324,8 @@ public class MainActivity extends Activity implements SensorEventListener {
                     getContentResolver().update(exportUri, complete, null, null);
                 }
                 toast("ZIP guardado en Descargas / SERS_Reportajes");
-            } catch (Exception e) { toast("Error cerrando ZIP: " + e.getMessage()); }
+                return true;
+            } catch (Exception e) { toast("Error cerrando ZIP: " + e.getMessage()); return false; }
         }
     }
 
