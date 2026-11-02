@@ -31,6 +31,7 @@
  <div class="panel">
   <div class="title-row"><h2>Mis reportajes</h2><span id="allCount" class="muted"></span></div>
   <div id="reportsList" class="reports-list"><p class="muted">Todavía no hay reportajes.</p></div>
+  <button id="importReportBtn" type="button" class="btn outline full import-report-button">↑ Importar reportaje desde ZIP</button>
  </div>
  <div class="panel sync-panel">
   <div class="title-row"><h2>☁ OneDrive</h2><span class="pill">Sincronización</span></div>
@@ -93,6 +94,7 @@
 </nav>
 <input id="cameraInput" type="file" accept="image/*" capture="environment" class="visually-hidden">
 <input id="galleryInput" type="file" accept="image/*" class="visually-hidden">
+<input id="importZipInput" type="file" accept=".zip,application/zip,application/x-zip-compressed" class="visually-hidden">
 <dialog id="photoDialog" class="photo-dialog">
  <div class="dialog-head"><strong id="dialogTitle">Fotografía</strong><button id="dialogClose" class="icon-btn" aria-label="Cerrar">✕</button></div>
  <img id="dialogPhoto" alt="Fotografía ampliada">
@@ -106,6 +108,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
 <script src="../zip.js" defer></script>
 <script src="./db.js" defer></script>
+<script src="./import.js" defer></script>
 <script src="./app.js" defer></script>
 <script src="./cloud.js" defer></script>
 </body>
