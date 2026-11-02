@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#24523c">
+<meta name="description" content="Reportajes fotográficos e inventarios SERS: fotos, voz, GPS y orientación.">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="../icons/icon-192.png">
+<link rel="apple-touch-icon" href="../icons/icon-192.png">
+<link rel="stylesheet" href="./styles.css">
+<title>SERS · Reportajes</title>
+</head>
+<body>
+<header class="topbar">
+ <div class="brand"><img src="../icons/icon-192.png" alt="" width="39" height="39"><div><strong>SERS</strong><span>REPORTAJES</span></div></div>
+ <div id="netBadge" class="net">Comprobando…</div>
+</header>
+<main>
+<section id="homeView" class="view">
+ <div class="intro"><span class="eyebrow">REPORTAJES E INVENTARIOS</span><h1>Fotografía. Describe. Continúa.</h1><p>Las fotos y notas se guardan en este móvil. Trabaja sin cobertura y sincroniza después.</p></div>
+ <div id="recentBox" class="recent hidden"><div class="recent-top"><span>ÚLTIMO REPORTAJE</span><span id="recentCount"></span></div><h2 id="recentName"></h2><p id="recentInfo"></p><button class="btn primary xl" id="resumeRecent">Continuar reportaje <span>→</span></button></div>
+ <div class="panel">
+  <h2>Nuevo reportaje</h2>
+  <label for="reportName">Nombre del reportaje</label>
+  <input id="reportName" maxlength="150" placeholder="Ej. Anteproyecto paseo Constitución">
+  <div class="choice-row"><label class="radio"><input type="radio" name="reportType" value="reportaje" checked> Reportaje fotográfico</label><label class="radio"><input type="radio" name="reportType" value="inventario"> Inventario</label></div>
+  <button id="createReport" class="btn primary full">+ Crear reportaje</button>
+ </div>
+ <div class="panel">
+  <div class="title-row"><h2>Mis reportajes</h2><span id="allCount" class="muted"></span></div>
+  <div id="reportsList" class="reports-list"><p class="muted">Todavía no hay reportajes.</p></div>
+ </div>
+ <div class="panel sync-panel">
+  <div class="title-row"><h2>☁ OneDrive</h2><span class="pill">Sincronización</span></div>
+  <p class="small muted">Se crean carpetas por reportaje y se suben fotos y datos únicamente cuando faltan o cambian.</p>
+  <p id="cloudStatus" class="small status">Sin configurar</p>
+  <button id="cloudSync" class="btn primary full">Sincronizar pendientes</button>
+  <details id="cloudSetup" class="setup">
+   <summary>Configurar cuenta Microsoft</summary>
+   <p class="small">Necesitas registrar SERS Reportajes como aplicación SPA en Microsoft Entra. La sesión de la app OneDrive no autoriza automáticamente esta aplicación.</p>
+   <label for="clientId">ID de aplicación (Client ID)</label><input id="clientId" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+   <label for="tenantId">Tenant ID (opcional, cuenta corporativa)</label><input id="tenantId" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ID del directorio de SERS">
+   <label for="redirectUri">Redirección SPA que debes registrar</label><input id="redirectUri" readonly>
+   <p class="small">Permisos delegados: <strong>Files.ReadWrite</strong> y <strong>User.Read</strong>. Nunca introduzcas un secreto de cliente.</p>
+   <button id="cloudSaveConfig" class="btn outline full">Guardar configuración</button>
+   <div class="button-row"><button id="cloudConnect" class="btn outline">Conectar Microsoft</button><button id="cloudDisconnect" class="btn outline hidden">Desconectar</button></div>
+  </details>
+  <label class="checkbox"><input type="checkbox" id="autoSync"> Sincronizar al guardar y al recuperar conexión (con la aplicación abierta)</label>
+  <p id="syncProgress" class="small muted" role="status"></p>
+ </div>
+</section>
+<section id="captureView" class="view hidden">
+ <div class="capture-heading"><div><span class="eyebrow" id="capType">REPORTAJE FOTOGRÁFICO</span><h1 id="capTitle">Reportaje</h1><span id="capCounter" class="muted">Foto 001</span></div><button id="captureBack" class="icon-btn" aria-label="Volver a reportajes">✕</button></div>
+ <div class="sensors">
+  <button id="gpsRefresh" class="sensor gps waiting"><span class="sensor-label">📍 PRECISIÓN GPS</span><strong id="gpsStatus">Obteniendo ubicación…</strong><small id="gpsHint">Pulsa para actualizar</small></button>
+  <button id="compassEnable" class="sensor"><span class="sensor-label">🧭 ORIENTACIÓN</span><strong id="compassStatus">No disponible</strong><small id="compassHint">Pulsa para activar</small></button>
+ </div>
+ <div id="captureEmpty" class="camera-area">
+  <button id="cameraButton" class="camera-button"><span class="camera-symbol">📷</span><strong>HACER FOTOGRAFÍA</strong><small>Abrir cámara del móvil</small></button>
+  <button id="galleryPick" class="text-button">Elegir de la galería</button>
+ </div>
+ <div id="captureFilled" class="hidden">
+  <div class="preview-wrap"><img id="capturePreview" alt="Vista previa de la fotografía"><button id="replacePhoto" class="preview-change">↻ Repetir foto</button></div>
+  <div class="description-panel"><div class="title-row"><h2>Descripción</h2><button id="dictate" class="mic-btn" aria-label="Dictar descripción">🎤 <span>Dictar</span></button></div>
+   <textarea id="photoDescription" rows="5" placeholder="Describe lo que se ve en la foto. Puedes dictarlo o escribirlo."></textarea>
+   <p id="dictateStatus" class="small muted">Puedes guardar la fotografía sin descripción y completarla después.</p>
+  </div>
+  <button id="saveAndNext" class="btn primary full xl">Guardar y siguiente foto →</button>
+ </div>
+ <p class="small subtle">La posición GPS y la orientación se registran automáticamente cuando están disponibles. Si la precisión es baja, puedes mencionar la ubicación en la descripción.</p>
+</section>
+<section id="galleryView" class="view hidden">
+ <div class="page-heading"><div><span class="eyebrow">REPORTAJE</span><h1>Galería fotográfica</h1><p id="gallerySubtitle" class="muted"></p></div></div>
+ <div id="galleryList" class="gallery-grid"></div>
+ <p id="galleryEmpty" class="empty muted">Este reportaje todavía no tiene fotografías.</p>
+</section>
+<section id="mapView" class="view hidden">
+ <div class="page-heading"><span class="eyebrow">UBICACIONES AUTOMÁTICAS</span><h1>Mapa del reportaje</h1><p class="muted small">Los círculos indican la precisión GPS; las flechas, el rumbo aproximado cuando está disponible.</p></div>
+ <div id="mapCanvas" class="map-canvas"></div>
+ <div id="mapMessage" class="small muted map-message">El mapa necesita conexión para mostrar la cartografía.</div>
+ <div id="mapList" class="map-list"></div>
+ <p class="small subtle">Cartografía © OpenStreetMap contributors. Las posiciones son estimaciones y las flechas no representan una orientación topográfica certificada.</p>
+</section>
+</main>
+<nav class="bottom-nav" aria-label="Navegación principal">
+ <button id="navHome" data-page="home" class="active"><span>▦</span>Reportajes</button>
+ <button id="navCapture" data-page="capture"><span>📷</span>Capturar</button>
+ <button id="navGallery" data-page="gallery"><span>▧</span>Galería</button>
+ <button id="navMap" data-page="map"><span>⌖</span>Mapa</button>
+</nav>
+<input id="cameraInput" type="file" accept="image/*" capture="environment" class="visually-hidden">
+<input id="galleryInput" type="file" accept="image/*" class="visually-hidden">
+<dialog id="photoDialog" class="photo-dialog">
+ <div class="dialog-head"><strong id="dialogTitle">Fotografía</strong><button id="dialogClose" class="icon-btn" aria-label="Cerrar">✕</button></div>
+ <img id="dialogPhoto" alt="Fotografía ampliada">
+ <p id="dialogMeta" class="small muted"></p>
+ <label for="dialogDescription">Descripción original</label>
+ <textarea id="dialogDescription" rows="5"></textarea>
+ <div class="button-row"><button id="dialogDelete" class="btn danger">Eliminar foto</button><button id="dialogSave" class="btn primary">Guardar cambios</button></div>
+</dialog>
+<div id="toast" class="toast hidden" role="status"></div>
+<script src="https://alcdn.msftauth.net/browser/2.35.0/js/msal-browser.min.js" defer></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+<script src="./db.js" defer></script>
+<script src="./app.js" defer></script>
+<script src="./cloud.js" defer></script>
+</body>
+</html>
