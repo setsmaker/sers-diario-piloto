@@ -6,7 +6,7 @@
   ('r'+Date.now().toString(36)+Math.random().toString(36).slice(2,11));
  const KEY='sers-reportajes-active-v1';
  let reports=[],activeId=localStorage.getItem(KEY)||'',photos=[],draft=null;
- let currentView='home',gps=null,heading=null,watchId=null,dictation=null,dictating=false;
+ let currentView='home',gps=null,heading=null,watchId=null,dictation=null,dictating=false,cameraStart=null;
  let draftQueue=Promise.resolve(),draftTimer=null,toastTimer=null,captureUrl=null,dialogUrl=null,dialogPhotoId=null,cardUrls=[],leafletMap=null,leafletLayers=null;
  const doc=(tag,cls,text)=>{
   const el=document.createElement(tag);
@@ -147,7 +147,7 @@
    const before=draft.position;
    if(elapsed<=20000&&(!before||measurement.accuracy<before.accuracy)&&
      (!before||distanceMeters(before.latitude,before.longitude,measurement.latitude,measurement.longitude)<Math.max(before.accuracy+measurement.accuracy,20))){
-     draft.position=gpsSnapshot();scheduleDraft();
+     draft.position=gpsSnapshot();scheduleDraft();updatePhotoLocationInfo();
    }
   }
  }
@@ -216,11 +216,21 @@
    if(saved?.file&&saved.reportId!==r.id)message('Hay una fotografía pendiente en otro reportaje.');
   }catch(e){console.error(e);draft=null;renderDraft();}
  }
+ function updatePhotoLocationInfo(){
+  const note=$('photoLocationInfo');if(!note)return;
+  const p=draft?.position,b=draft?.orientation;
+  note.textContent=(p?'📍 GPS de la foto: ±'+Math.round(p.accuracy)+' m':
+   '📍 Foto sin coordenadas asociadas')+
+   (p?.context==='antes_de_camara'?' (medición anterior a abrir la cámara)':'')+
+   (b?' · 🧭 ≈'+Math.round(b.degrees)+'°':' · 🧭 sin orientación');
+  note.className='small photo-location-info '+gpsClass(p?.accuracy);
+ }
  function renderDraft(){
   const hasFile=Boolean(draft?.file);
   $('captureEmpty').classList.toggle('hidden',hasFile);
   $('captureFilled').classList.toggle('hidden',!hasFile);
   setCaptureUrl(hasFile?draft.file:null);
+  updatePhotoLocationInfo();
   $('photoDescription').value=draft?.description||'';
   if(hasFile&&draft.position&&draft.position.accuracy>25){
    $('dictateStatus').textContent='GPS de la foto: ±'+Math.round(draft.position.accuracy)+' m. Puedes precisar su localización al describirla.';
@@ -246,10 +256,17 @@
   stopDictation();
   if(draft?.file&&!confirm('Sustituir la fotografía actual? Se perderá la imagen del borrador.'))return;
   const captureTime=source==='camera'?now():new Date(file.lastModified||Date.now()).toISOString();
+  let position=source==='camera'?gpsSnapshot():null;
+  let orientationValue=source==='camera'?headingSnapshot():null;
+  if(source==='camera'&&cameraStart&&Date.now()-Date.parse(cameraStart.at)<120000){
+   if(!position&&cameraStart.position)position={...cameraStart.position,context:'antes_de_camara'};
+   if(!orientationValue&&cameraStart.orientation)orientationValue={...cameraStart.orientation,
+     method:cameraStart.orientation.method+'-antes-de-camara'};
+  }
+  cameraStart=null;
   draft={id:'capture',reportId:activeId,file,originalName:file.name,
    description:'',source,capturedAt:captureTime,selectedAt:now(),
-   position:source==='camera'?gpsSnapshot():null,
-   orientation:source==='camera'?headingSnapshot():null};
+   position,orientation:orientationValue};
   renderDraft();
   try{await saveDraftNow();}catch{}
  }
@@ -512,8 +529,12 @@
  $('captureBack').addEventListener('click',()=>chooseView('home'));
  $('gpsRefresh').addEventListener('click',refreshGPS);
  $('compassEnable').addEventListener('click',requestCompass);
- $('cameraButton').addEventListener('click',()=>$('cameraInput').click());
- $('replacePhoto').addEventListener('click',()=>$('cameraInput').click());
+ function launchCamera(){
+  cameraStart={position:gpsSnapshot(),orientation:headingSnapshot(),at:now()};
+  $('cameraInput').click();
+ }
+ $('cameraButton').addEventListener('click',launchCamera);
+ $('replacePhoto').addEventListener('click',launchCamera);
  $('galleryPick').addEventListener('click',()=>$('galleryInput').click());
  $('cameraInput').addEventListener('change',e=>photoSelected(e,'camera'));
  $('galleryInput').addEventListener('change',e=>photoSelected(e,'gallery'));
