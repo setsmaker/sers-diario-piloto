@@ -80,9 +80,13 @@
     latest.closedAt=latest.closedAt?null:now();
     await saveReport(latest);renderHome();
    });
+   const shareB=doc('button','share-report-button','☁ Enviar a OneDrive');
+   shareB.addEventListener('click',()=>exportReport(r.id,shareB,true));
+   // El envío necesita el puente Android de la APK; la PWA conserva Exportar ZIP.
+   shareB.classList.toggle('hidden',!window.SersAndroid?.beginShareZip);
    const exportB=doc('button','text-report-action','Exportar ZIP');
-   exportB.addEventListener('click',()=>exportReport(r.id,exportB));
-   right.append(open,more,exportB);line.append(left,right);holder.append(line);
+   exportB.addEventListener('click',()=>exportReport(r.id,exportB,false));
+   right.append(open,more,shareB,exportB);line.append(left,right);holder.append(line);
   }
  }
  async function createReport(){
@@ -448,9 +452,11 @@
   if(match)return match[1].toLowerCase();
   return p.mime?.includes('png')?'png':p.mime?.includes('webp')?'webp':'jpg';};
  const clean=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'_').slice(0,50)||'reportaje';
- async function exportReport(id,button){
+ async function exportReport(id,button,share=false){
   if(typeof SersZip==='undefined'){message('No se ha cargado el generador ZIP.');return;}
   button.disabled=true;
+  const oldText=button.textContent;
+  button.textContent=share?'Preparando para OneDrive…':'Creando ZIP…';
   try{
    const report=await ReportDB.getReport(id),images=await ReportDB.photosByReport(id);
    if(!report)throw new Error('Reportaje no encontrado');
@@ -466,24 +472,30 @@
     cerrado:report.closedAt,numero_fotos:images.length},null,2)});
    const blob=await SersZip.create(files);
    const filename='SERS_REPORTAJE_'+clean(report.name)+'_'+today()+'.zip';
+   if(share&&!window.SersAndroid?.beginShareZip){
+    throw new Error('Esta versión de la APK no permite compartir. Actualiza SERS Reportajes.');
+   }
    if(window.SersAndroid?.beginZip){
-    if(!window.SersAndroid.beginZip(filename))throw new Error('Android no pudo preparar el archivo ZIP.');
+    const started=share?window.SersAndroid.beginShareZip(filename):window.SersAndroid.beginZip(filename);
+    if(!started)throw new Error('Android no pudo preparar el archivo ZIP.');
     for(let offset=0;offset<blob.size;offset+=128*1024){
      const part=new Uint8Array(await blob.slice(offset,offset+128*1024).arrayBuffer());
      let binary='';
      for(let k=0;k<part.length;k+=8192)binary+=String.fromCharCode(...part.subarray(k,k+8192));
      if(!window.SersAndroid.appendZipChunk(btoa(binary)))throw new Error('Error al escribir el ZIP en Android.');
     }
-    if(!window.SersAndroid.finishZip())throw new Error('Android no pudo finalizar el ZIP.');
-    message('ZIP guardado en Descargas / SERS_Reportajes.');
+    const finished=share?window.SersAndroid.finishShareZip():window.SersAndroid.finishZip();
+    if(!finished)throw new Error('Android no pudo finalizar el ZIP.');
+    message(share?'Se está abriendo OneDrive para elegir la carpeta.':
+      'ZIP guardado en Descargas / SERS_Reportajes.');
    }else{
     const u=URL.createObjectURL(blob),link=doc('a');
     link.href=u;link.download=filename;
     document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(u),60000);
     message('ZIP preparado. Revisa Descargas.');
    }
-  }catch(e){console.error(e);message('No se pudo exportar. Revisa el espacio libre.');}
-  finally{button.disabled=false;}
+  }catch(e){console.error(e);message('No se pudo preparar el reportaje: '+String(e.message||e).slice(0,110));}
+  finally{button.disabled=false;button.textContent=oldText;}
  }
  function renderMap(){
   const report=active();if(!report)return;
