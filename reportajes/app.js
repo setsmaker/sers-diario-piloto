@@ -243,6 +243,7 @@
   const file=event.target.files?.[0];event.target.value='';
   if(!file)return;
   if(!file.type.startsWith('image/')){message('Selecciona un archivo de imagen.');return;}
+  stopDictation();
   if(draft?.file&&!confirm('Sustituir la fotografía actual? Se perderá la imagen del borrador.'))return;
   const captureTime=source==='camera'?now():new Date(file.lastModified||Date.now()).toISOString();
   draft={id:'capture',reportId:activeId,file,originalName:file.name,
@@ -285,15 +286,20 @@
   }catch(e){message('No se pudo iniciar el dictado.');}
  }
  function stopDictation(){
-  if(!dictation)return;
-  try{dictation.stop();}catch{}
-  dictation=null;
+  if(!dictation)return Promise.resolve();
+  const current=dictation;
+  return new Promise(resolve=>{
+   const prev=current.onend;
+   current.onend=()=>{try{prev?.();}finally{resolve();}};
+   try{current.stop();}catch{resolve();}
+   setTimeout(resolve,1800);
+  });
  }
  async function savePhoto(){
   if(!draft?.file||!active()){message('Haz una fotografía primero.');return;}
   $('saveAndNext').disabled=true;
   try{
-   stopDictation();
+   await stopDictation();
    draft.description=$('photoDescription').value;
    await saveDraftNow();await draftQueue;
    const r=await ReportDB.getReport(activeId);
@@ -407,7 +413,7 @@
   return p.mime?.includes('png')?'png':p.mime?.includes('webp')?'webp':'jpg';};
  const clean=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'_').slice(0,50)||'reportaje';
  async function exportReport(id,button){
-  if(!window.SersZip){message('No se ha cargado el generador ZIP.');return;}
+  if(typeof SersZip==='undefined'){message('No se ha cargado el generador ZIP.');return;}
   button.disabled=true;
   try{
    const report=await ReportDB.getReport(id),images=await ReportDB.photosByReport(id);
