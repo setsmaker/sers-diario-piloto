@@ -1,0 +1,26 @@
+{
+  "name": "SERS Reportajes Fotográficos",
+  "short_name": "SERS Reportajes",
+  "description": "Reportajes fotográficos e inventarios SERS con fotografías, dictado, GPS y orientación.",
+  "id": "/sers-diario-piloto/reportajes/",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f7f4",
+  "theme_color": "#24523c",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "../icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "../icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
