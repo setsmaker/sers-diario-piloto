@@ -35,3 +35,53 @@ h1,h2,p{margin:0}.eyebrow{font-size:12px;color:var(--accent);font-weight:800;let
   min-height:44px;white-space:normal;padding:8px 11px;border:0;border-radius:9px;
 }
 .report-actions .share-report-button:active{background:#205139}
+
+/* v3 · Captura de campo en una sola pantalla, con acciones al alcance del pulgar. */
+.topbar{min-height:54px;padding:7px 12px;gap:9px}
+.brand{gap:8px;min-width:0;white-space:nowrap}
+.brand img{width:30px;height:30px;border-radius:8px}
+.brand strong{font-size:18px;letter-spacing:.025em;line-height:1.1;white-space:nowrap}
+.brand strong span{display:inline;color:#d6eddf;font-size:17px;letter-spacing:.015em;margin:0}
+.net{font-size:11px;padding:5px 7px;flex-shrink:0}
+.capture-mode main{padding:8px 12px calc(83px + env(safe-area-inset-bottom))}
+.capture-mode .capture-heading{margin-bottom:8px;align-items:center}
+.capture-mode .capture-heading-info{min-width:0;display:flex;flex-direction:column;gap:2px}
+.capture-mode .capture-heading h1{font-size:clamp(18px,5vw,23px);margin:0;line-height:1.13;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.capture-mode #capCounter{font-size:12px}
+.capture-mode .icon-btn{height:34px;min-width:34px;font-size:17px}
+.capture-mode .sensors{gap:7px;margin-bottom:8px}
+.capture-mode .sensor{min-height:58px;padding:7px 9px;gap:3px;border-radius:10px}
+.capture-mode .sensor-label{font-size:10px;letter-spacing:.025em}
+.capture-mode .sensor strong{font-size:15px;line-height:1.15;white-space:nowrap}
+.capture-mode .camera-area{min-height:235px;padding:12px;gap:8px;margin-bottom:0}
+.capture-mode .camera-button{min-height:182px}
+.capture-mode .camera-symbol{font-size:47px;margin-bottom:8px}
+.capture-mode .camera-button strong{font-size:18px}
+.capture-mode .camera-button small{margin-top:5px}
+.capture-mode .preview-wrap{min-height:0;margin-bottom:8px;border-radius:11px;position:relative}
+.capture-mode .preview-wrap img{max-width:100%;max-height:min(25dvh,215px);width:auto;height:auto;object-fit:contain}
+.capture-mode .preview-change{bottom:6px;right:6px;padding:7px 10px;font-size:12px}
+.photo-overlay{position:absolute;top:0;left:0;right:0;z-index:2;pointer-events:none;
+ padding:5px 9px 9px;background:linear-gradient(180deg,rgba(8,20,11,.93),rgba(8,20,11,.67) 78%,transparent);
+ color:#fff;font-size:11px;font-weight:650;line-height:1.25;text-shadow:0 1px 2px #0008}
+.photo-overlay-line{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:1px 0}
+.photo-overlay.good .photo-overlay-line:nth-child(2){color:#baf4c9}
+.photo-overlay.warning .photo-overlay-line:nth-child(2){color:#ffe09b}
+.photo-overlay.bad .photo-overlay-line:nth-child(2){color:#ffad9e}
+.capture-mode .description-panel{padding:10px 12px;margin-bottom:8px;border-radius:12px}
+.capture-mode .description-panel h2{font-size:16px}
+.capture-mode .mic-btn{min-height:40px;font-size:15px;padding:6px 11px;border-radius:9px}
+.capture-mode .description-panel textarea{margin-top:8px;min-height:78px;height:clamp(78px,12dvh,105px);padding:8px 10px;font-size:16px}
+.capture-mode .description-panel p{margin-top:5px}
+.capture-mode .description-panel p:empty{display:none}
+.capture-mode #saveAndNext{min-height:50px;font-size:17px}
+.bottom-nav{padding:4px 8px calc(5px + env(safe-area-inset-bottom))}
+.bottom-nav button{min-height:49px;padding:5px 2px;gap:2px}
+.bottom-nav button>span{font-size:20px}
+@media(max-width:375px){.brand strong{font-size:15px}.brand strong span{font-size:14px}.net{font-size:10px}}
+@media(max-height:730px){
+ .capture-mode .preview-wrap img{max-height:min(22dvh,165px)}
+ .capture-mode .description-panel textarea{height:76px;min-height:76px}
+ .capture-mode .sensor{min-height:51px}
+ .capture-mode .camera-button{min-height:155px}
+}
