@@ -6,7 +6,7 @@
   ('r'+Date.now().toString(36)+Math.random().toString(36).slice(2,11));
  const KEY='sers-reportajes-active-v1';
  let reports=[],activeId=localStorage.getItem(KEY)||'',photos=[],draft=null;
- let currentView='home',gps=null,heading=null,watchId=null,dictation=null,dictating=false,cameraStart=null;
+ let currentView='home',gps=null,gpsError='',heading=null,watchId=null,dictation=null,dictating=false,cameraStart=null;
  let draftQueue=Promise.resolve(),draftTimer=null,toastTimer=null,captureUrl=null,dialogUrl=null,dialogPhotoId=null,cardUrls=[],leafletMap=null,leafletLayers=null;
  const doc=(tag,cls,text)=>{
   const el=document.createElement(tag);
@@ -59,8 +59,7 @@
   $('allCount').textContent=reports.length+' en total';
   if(last){
    $('recentName').textContent=last.name;
-   $('recentInfo').textContent=(last.type==='inventario'?'Inventario':'Reportaje fotográfico')+
-    ' · '+dateNice(last.updatedAt)+(last.closedAt?' · Finalizado':' · En curso');
+   $('recentInfo').textContent=dateNice(last.updatedAt)+(last.closedAt?' · Finalizado':' · En curso');
    $('recentCount').textContent=(last.photoCount||0)+' fotos';
   }
   const holder=$('reportsList');holder.replaceChildren();
@@ -92,8 +91,7 @@
  async function createReport(){
   const name=$('reportName').value.trim();
   if(name.length<3){message('Escribe un nombre de reportaje de al menos 3 caracteres.');return;}
-  const type=document.querySelector('input[name="reportType"]:checked')?.value||'reportaje';
-  const r={id:uid(),name,type,createdAt:now(),updatedAt:now(),closedAt:null,photoCount:0};
+  const r={id:uid(),name,type:'reportaje',createdAt:now(),updatedAt:now(),closedAt:null,photoCount:0};
   try{
    await ReportDB.saveReport(r);
    $('reportName').value='';
@@ -124,10 +122,9 @@
   const accuracy=fresh?gps.accuracy:null;
   const g=$('gpsRefresh');
   g.className='sensor gps '+gpsClass(accuracy);
-  $('gpsStatus').textContent=accuracy==null?(gps?'Posición antigua':'Obteniendo ubicación…'):gpsText(accuracy);
-  $('gpsHint').textContent=accuracy!=null?'Medición hace '+age+' s · Toca para actualizar':'Toca para actualizar el GPS';
-  $('compassStatus').textContent=heading?'≈ '+Math.round(heading.degrees)+'° '+cardinal(heading.degrees):'No disponible';
-  $('compassHint').textContent=heading?'Brújula aproximada · '+timeNice(heading.time):'Toca para intentar activarla';
+  $('gpsStatus').textContent=accuracy==null?(gps?'GPS antiguo':gpsError||'Buscando…'):gpsText(accuracy);
+  const freshHeading=heading&&Date.now()-Date.parse(heading.time)<=10000;
+  $('compassStatus').textContent=freshHeading?'≈ '+Math.round(heading.degrees)+'° '+cardinal(heading.degrees):'Sin datos';
  }
  const cardinal=degrees=>['N','NE','E','SE','S','SO','O','NO'][Math.round(((degrees%360)+360)%360/45)%8];
  function gpsSnapshot(){
@@ -141,6 +138,7 @@
   return {...heading};
  }
  function gpsUpdate(pos){
+  gpsError='';
   const c=pos.coords;
   const measurement={latitude:c.latitude,longitude:c.longitude,accuracy:c.accuracy,
    altitude:c.altitude,altitudeAccuracy:c.altitudeAccuracy,timestamp:pos.timestamp};
@@ -163,9 +161,9 @@
   if(watchId!=null||!navigator.geolocation)return;
   try{
    watchId=navigator.geolocation.watchPosition(gpsUpdate,error=>{
-    $('gpsHint').textContent=error.code===1?'Activa el permiso de ubicación.':'No se pudo obtener el GPS. Puedes seguir.';
-    if(!gps)$('gpsStatus').textContent='Sin ubicación';
-   },{enableHighAccuracy:true,maximumAge:3000,timeout:25000});
+    gpsError=error.code===1?'Sin permiso GPS':'Sin ubicación';
+    updateSensors();
+   },{enableHighAccuracy:true,maximumAge:1000,timeout:25000});
   }catch(e){$('gpsStatus').textContent='GPS no disponible';}
  }
  function refreshGPS(){
@@ -209,7 +207,6 @@
  }
  async function openCapture(){
   const r=active();if(!r)return;
-  $('capType').textContent=r.type==='inventario'?'INVENTARIO':'REPORTAJE FOTOGRÁFICO';
   $('capTitle').textContent=r.name;
   $('capCounter').textContent='Fotografía '+labelNum((r.photoCount||0)+1);
   startGPS();enableCompass();updateSensors();
@@ -222,12 +219,20 @@
  }
  function updatePhotoLocationInfo(){
   const note=$('photoLocationInfo');if(!note)return;
-  const p=draft?.position,b=draft?.orientation;
-  note.textContent=(p?'📍 GPS de la foto: ±'+Math.round(p.accuracy)+' m':
-   '📍 Foto sin coordenadas asociadas')+
-   (p?.context==='antes_de_camara'?' (medición anterior a abrir la cámara)':'')+
-   (b?' · 🧭 ≈'+Math.round(b.degrees)+'°':' · 🧭 sin orientación');
-  note.className='small photo-location-info '+gpsClass(p?.accuracy);
+  note.replaceChildren();
+  const p=draft?.position,b=draft?.orientation,file=draft?.file;
+  if(!file)return;
+  const t=new Date(draft.capturedAt);
+  const dateValid=Number.isFinite(t.getTime());
+  const metaLine=doc('div','photo-overlay-line',
+    (dateValid?t.toLocaleDateString('es-ES')+' · '+timeNice(draft.capturedAt):'Sin fecha')+
+    ' · '+(draft.originalName||'Foto')+' · '+Math.max(0,Math.round(file.size/1024))+' KB');
+  const geoLine=doc('div','photo-overlay-line',
+    p?'📍 '+p.latitude.toFixed(6)+', '+p.longitude.toFixed(6)+' · ±'+Math.round(p.accuracy)+' m':
+    '📍 Sin coordenadas');
+  const dirLine=doc('div','photo-overlay-line',b?'🧭 ≈'+Math.round(b.degrees)+'° '+cardinal(b.degrees):'🧭 Sin orientación');
+  note.append(metaLine,geoLine,dirLine);
+  note.className='photo-overlay '+gpsClass(p?.accuracy);
  }
  function renderDraft(){
   const hasFile=Boolean(draft?.file);
@@ -236,9 +241,7 @@
   setCaptureUrl(hasFile?draft.file:null);
   updatePhotoLocationInfo();
   $('photoDescription').value=draft?.description||'';
-  if(hasFile&&draft.position&&draft.position.accuracy>25){
-   $('dictateStatus').textContent='GPS de la foto: ±'+Math.round(draft.position.accuracy)+' m. Puedes precisar su localización al describirla.';
-  }else $('dictateStatus').textContent='La descripción se guarda automáticamente. Puedes completarla después.';
+  $('dictateStatus').textContent='';
  }
  function scheduleDraft(){
   if(!draft?.file)return;
@@ -603,7 +606,7 @@
  document.addEventListener('visibilitychange',()=>{
   if(!document.hidden&&currentView==='capture'){startGPS();updateSensors();}
  });
- setInterval(()=>{if(currentView==='capture')updateSensors();},4000);
+ setInterval(()=>{if(currentView==='capture')updateSensors();},1000);
  if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js',{scope:'./'}).catch(console.warn);
  boot();
  window.SersReportajes={photoMeta,geojson,reportPhotos:()=>ReportDB.allPhotos(),reportList:()=>ReportDB.listReports()};
