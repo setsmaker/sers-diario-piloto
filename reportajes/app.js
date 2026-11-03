@@ -101,6 +101,35 @@
    message('Reportaje creado. Ya puedes hacer fotografías.');
   }catch(error){console.error(error);message('No se pudo crear el reportaje en este móvil.');}
  }
+ async function importReport(event){
+  const zip=event.target.files?.[0];event.target.value='';
+  if(!zip)return;
+  if(typeof SersImport==='undefined'){
+   message('No se ha cargado la recuperación de copias ZIP.');return;
+  }
+  const button=$('importReportBtn');button.disabled=true;button.textContent='Recuperando…';
+  try{
+   const imported=await SersImport.load(zip);
+   const existing=await ReportDB.getReport(imported.report.id);
+   if(existing&&!confirm('Ya existe este reportaje. ¿Recuperar solo las fotografías que falten?'))return;
+   const old=existing?await ReportDB.photosByReport(imported.report.id):[];
+   const known=new Set(old.map(p=>p.id));
+   let count=0;
+   for(const p of imported.photos){
+    if(known.has(p.id))continue;
+    await ReportDB.savePhoto(p);count++;
+   }
+   const report=existing||imported.report;
+   report.photoCount=(await ReportDB.photosByReport(report.id)).length;
+   if(!existing||count)report.updatedAt=now();
+   await ReportDB.saveReport(report);
+   await reload();renderHome();
+   message('Recuperadas '+count+' fotografías.');
+  }catch(error){
+   console.error('Error recuperando copia',error);
+   message('Error al importar: '+String(error.message||error).slice(0,100));
+  }finally{button.disabled=false;button.textContent='Importar copia ZIP';}
+ }
  async function selectReport(id,page='capture'){
   if(draft?.file&&draft.reportId!==id){
    await saveDraftNow();
@@ -575,6 +604,8 @@
   }catch(e){console.error(e);message('No se pudo abrir el almacenamiento del móvil.');}
  }
  $('createReport').addEventListener('click',createReport);
+ $('importReportBtn').addEventListener('click',()=>$('importZipInput').click());
+ $('importZipInput').addEventListener('change',importReport);
  $('resumeRecent').addEventListener('click',()=>reports[0]&&selectReport(reports[0].id,reports[0].closedAt?'gallery':'capture'));
  for(const name of ['home','capture','gallery','map']){
   $('nav'+name[0].toUpperCase()+name.slice(1)).addEventListener('click',()=>chooseView(name));
