@@ -14,18 +14,17 @@
 </head>
 <body>
 <header class="topbar">
- <div class="brand"><img src="../icons/icon-192.png" alt="" width="39" height="39"><div><strong>SERS</strong><span>REPORTAJES</span></div></div>
+ <div class="brand"><img src="../icons/icon-192.png" alt="" width="30" height="30"><strong>SERS <span>REPORTAJES</span></strong></div>
  <div id="netBadge" class="net">Comprobando…</div>
 </header>
 <main>
 <section id="homeView" class="view">
- <div class="intro"><span class="eyebrow">REPORTAJES E INVENTARIOS</span><h1>Fotografía. Describe. Continúa.</h1><p>Las fotos y notas se guardan en este móvil. Trabaja sin cobertura y sincroniza después.</p></div>
+ <div class="intro"><span class="eyebrow">REPORTAJES FOTOGRÁFICOS</span><h1>Fotografía. Describe. Continúa.</h1><p>Las fotos y notas se guardan en este móvil. Trabaja sin cobertura y sincroniza después.</p></div>
  <div id="recentBox" class="recent hidden"><div class="recent-top"><span>ÚLTIMO REPORTAJE</span><span id="recentCount"></span></div><h2 id="recentName"></h2><p id="recentInfo"></p><button class="btn primary xl" id="resumeRecent">Continuar reportaje <span>→</span></button></div>
  <div class="panel">
   <h2>Nuevo reportaje</h2>
   <label for="reportName">Nombre del reportaje</label>
   <input id="reportName" maxlength="150" placeholder="Ej. Anteproyecto paseo Constitución">
-  <div class="choice-row"><label class="radio"><input type="radio" name="reportType" value="reportaje" checked> Reportaje fotográfico</label><label class="radio"><input type="radio" name="reportType" value="inventario"> Inventario</label></div>
   <button id="createReport" class="btn primary full">+ Crear reportaje</button>
  </div>
  <div class="panel">
@@ -52,25 +51,24 @@
  </div>
 </section>
 <section id="captureView" class="view hidden">
- <div class="capture-heading"><div><span class="eyebrow" id="capType">REPORTAJE FOTOGRÁFICO</span><h1 id="capTitle">Reportaje</h1><span id="capCounter" class="muted">Foto 001</span></div><button id="captureBack" class="icon-btn" aria-label="Volver a reportajes">✕</button></div>
+ <div class="capture-heading"><div class="capture-heading-info"><h1 id="capTitle">Reportaje</h1><span id="capCounter" class="muted">Foto 001</span></div><button id="captureBack" class="icon-btn" aria-label="Volver a reportajes">✕</button></div>
  <div class="sensors">
-  <button id="gpsRefresh" class="sensor gps waiting"><span class="sensor-label">📍 PRECISIÓN GPS</span><strong id="gpsStatus">Obteniendo ubicación…</strong><small id="gpsHint">Pulsa para actualizar</small></button>
-  <button id="compassEnable" class="sensor"><span class="sensor-label">🧭 ORIENTACIÓN</span><strong id="compassStatus">No disponible</strong><small id="compassHint">Pulsa para activar</small></button>
+  <button id="gpsRefresh" class="sensor gps waiting" title="Actualizar GPS" aria-label="Actualizar posición GPS"><span class="sensor-label">📍 GPS</span><strong id="gpsStatus">Buscando…</strong></button>
+  <button id="compassEnable" class="sensor" title="Activar brújula" aria-label="Activar brújula"><span class="sensor-label">🧭 ORIENTACIÓN</span><strong id="compassStatus">Sin datos</strong></button>
  </div>
  <div id="captureEmpty" class="camera-area">
   <button id="cameraButton" class="camera-button"><span class="camera-symbol">📷</span><strong>HACER FOTOGRAFÍA</strong><small>Abrir cámara del móvil</small></button>
   <button id="galleryPick" class="text-button">Elegir de la galería</button>
  </div>
  <div id="captureFilled" class="hidden">
-  <div class="preview-wrap"><img id="capturePreview" alt="Vista previa de la fotografía"><button id="replacePhoto" class="preview-change">↻ Repetir foto</button></div>
-  <p id="photoLocationInfo" class="small photo-location-info"></p>
+  <div class="preview-wrap"><img id="capturePreview" alt="Vista previa de la fotografía"><div id="photoLocationInfo" class="photo-overlay" aria-live="polite"></div><button id="replacePhoto" class="preview-change">↻ Repetir</button></div>
   <div class="description-panel"><div class="title-row"><h2>Descripción</h2><button id="dictate" class="mic-btn" aria-label="Dictar descripción">🎤 <span>Dictar</span></button></div>
-   <textarea id="photoDescription" rows="5" placeholder="Describe lo que se ve en la foto. Puedes dictarlo o escribirlo."></textarea>
-   <p id="dictateStatus" class="small muted">Puedes guardar la fotografía sin descripción y completarla después.</p>
+   <textarea id="photoDescription" rows="3" placeholder="Describe la fotografía o utiliza el micrófono."></textarea>
+   <p id="dictateStatus" class="small muted" role="status" aria-live="polite"></p>
   </div>
-  <button id="saveAndNext" class="btn primary full xl">Guardar y siguiente foto →</button>
+  <button id="saveAndNext" class="btn primary full xl">Guardar y siguiente →</button>
  </div>
- <p class="small subtle">La posición GPS y la orientación se registran automáticamente cuando están disponibles. Si la precisión es baja, puedes mencionar la ubicación en la descripción.</p>
+
 </section>
 <section id="galleryView" class="view hidden">
  <div class="page-heading"><div><span class="eyebrow">REPORTAJE</span><h1>Galería fotográfica</h1><p id="gallerySubtitle" class="muted"></p></div></div>
