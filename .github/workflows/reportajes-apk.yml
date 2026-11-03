@@ -49,24 +49,24 @@ jobs:
       - name: Preparar APK con nombre de instalación
         run: |
           mkdir -p dist
-          cp android-reportajes/app/build/outputs/apk/debug/app-debug.apk dist/SERS_Reportajes_v2.apk
-          test -s dist/SERS_Reportajes_v2.apk
+          cp android-reportajes/app/build/outputs/apk/debug/app-debug.apk dist/SERS_Reportajes_v3.apk
+          test -s dist/SERS_Reportajes_v3.apk
       - name: Adjuntar APK a GitHub Actions
         uses: actions/upload-artifact@v4
         with:
           name: SERS-Reportajes-APK
-          path: dist/SERS_Reportajes_v2.apk
+          path: dist/SERS_Reportajes_v3.apk
       - name: Publicar APK de prueba en GitHub Releases
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          TAG="sers-reportajes-v2"
+          TAG="sers-reportajes-v3"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/SERS_Reportajes_v2.apk --clobber
+            gh release upload "$TAG" dist/SERS_Reportajes_v3.apk --clobber
           else
-            gh release create "$TAG" dist/SERS_Reportajes_v2.apk \
-              --title "SERS Reportajes · APK de prueba v2" \
-              --notes "APK Android independiente del Diario de Obra. Incorpora Enviar a OneDrive con sistema compartir Android, sin registro Microsoft Entra. Captura, GPS, brújula, dictado, galería, mapa y exportación ZIP. APK de prueba; se recomienda no usar con información confidencial hasta validar seguridad y sincronización."
+            gh release create "$TAG" dist/SERS_Reportajes_v3.apk \
+              --title "SERS Reportajes · APK de prueba v3" \
+              --notes "APK Android independiente del Diario de Obra. Incorpora Enviar a OneDrive y pantalla de captura compacta con metadatos sobre la foto, GPS y brújula actualizados aproximadamente cada segundo. Captura, GPS, brújula, dictado, galería, mapa y exportación ZIP. APK de prueba; se recomienda no usar con información confidencial hasta validar seguridad y sincronización."
           fi
