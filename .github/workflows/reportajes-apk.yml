@@ -40,7 +40,7 @@ jobs:
           ASSETS="android-reportajes/app/src/main/assets/web"
           mkdir -p "$ASSETS/reportajes" "$ASSETS/icons" android-reportajes/app/src/main/res/drawable-nodpi
           cp reportajes/index.html reportajes/styles.css reportajes/db.js reportajes/app.js \
-            reportajes/cloud.js reportajes/sw.js reportajes/manifest.webmanifest "$ASSETS/reportajes/"
+            reportajes/cloud.js reportajes/import.js reportajes/sw.js reportajes/manifest.webmanifest "$ASSETS/reportajes/"
           cp zip.js "$ASSETS/zip.js"
           cp icons/icon-192.png icons/icon-512.png "$ASSETS/icons/"
           cp icons/icon-192.png android-reportajes/app/src/main/res/drawable-nodpi/ic_launcher.png
