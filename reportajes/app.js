@@ -33,6 +33,7 @@
   const report=active();
   if(name!=='home'&&!report){name='home';message('Selecciona primero un reportaje.');}
   currentView=name;
+  document.body.classList.toggle('capture-mode',name==='capture');
   for(const page of ['home','capture','gallery','map']){
    $(page+'View').classList.toggle('hidden',page!==name);
    $('nav'+page[0].toUpperCase()+page.slice(1)).classList.toggle('active',page===name);
