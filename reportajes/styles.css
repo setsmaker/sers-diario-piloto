@@ -85,3 +85,49 @@ h1,h2,p{margin:0}.eyebrow{font-size:12px;color:var(--accent);font-weight:800;let
  .capture-mode .sensor{min-height:51px}
  .capture-mode .camera-button{min-height:155px}
 }
+
+/* v4 · Visor cartográfico IGN/PNOA con marcadores propios.
+   Leaflet CSS se sirve localmente; estas reglas no dependen del CDN. */
+.map-toolbar{display:flex;align-items:center;gap:5px;margin:0 0 9px;flex-wrap:nowrap}
+.map-source,.map-fit{
+ border:1.5px solid #adc5b4;border-radius:8px;background:#fff;color:#2b6045;
+ font-size:12px;font-weight:760;min-height:38px;padding:7px 9px;white-space:nowrap;
+}
+.map-source.active{background:#285b43;color:white;border-color:#285b43}
+.map-source:active,.map-fit:active{filter:brightness(.9)}
+.map-fit{margin-left:auto;font-size:24px;line-height:1;padding:4px 11px;flex-shrink:0}
+.map-canvas{position:relative;height:min(49dvh,415px);min-height:265px;isolation:isolate;overflow:hidden}
+.map-canvas.leaflet-container{background:#eef1eb}
+.map-canvas .leaflet-control-zoom a{font-size:21px;color:#24523c}
+.map-canvas .leaflet-control-attribution{font-size:10px;max-width:calc(100vw - 55px);white-space:normal;text-align:right}
+.map-message{margin:10px 2px 12px;min-height:19px}
+.sers-photo-marker{background:transparent;border:0;overflow:visible!important}
+.photo-marker-body{position:absolute;left:3px;top:8px;display:flex;align-items:center;justify-content:center;
+ width:38px;height:34px;border-radius:10px;background:#fff;border:3px solid #174b32;
+ color:#14442d;box-shadow:0 2px 7px #0c1d0caa;font-size:15px;font-weight:850;line-height:1;white-space:nowrap}
+.photo-marker-body b{position:relative;z-index:2}
+.photo-marker-heading{position:absolute;left:calc(50% - 11px);top:-22px;width:22px;height:22px;
+ display:flex;align-items:center;justify-content:center;color:#fff;
+ font-size:23px;font-weight:1000;line-height:1;
+ text-shadow:1px 1px #163b20,-1px -1px #163b20,0 2px #163b20;
+ transform-origin:50% 85%;filter:drop-shadow(0 1px 2px #102319)}
+.map-popup img{display:block;width:100%;max-height:150px;object-fit:contain;background:#f1f3f2;margin:7px 0;border-radius:6px}
+.map-popup p{font-size:13px;line-height:1.4;margin:5px 0;max-height:100px;overflow:auto}
+.map-popup small{font-size:11px;color:#4a6a55}
+.map-list{margin-top:9px}
+.map-entry{padding:0;overflow:hidden;display:flex;align-items:stretch;gap:0}
+.map-entry:has(.map-photo-button.selected){border-color:#397558;background:#eaf5ed}
+.map-photo-button{display:flex;align-items:center;gap:10px;flex:1;min-width:0;text-align:left;background:none;border:0;
+ padding:12px 10px;color:inherit}
+.map-photo-button.selected{background:#e0f1e5}
+.map-photo-button .index{font-size:14px;font-weight:850;min-width:55px}
+.map-photo-button .map-meta{display:flex;flex-direction:column;gap:4px;min-width:0}
+.map-photo-button strong{font-size:13px;font-weight:750;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.map-photo-button .map-meta span{font-size:12px;color:#66806e}
+.map-external{padding:12px 14px;border-left:1px solid #d4e1d8;color:#225739;font-size:22px;
+ display:grid;place-items:center;min-width:44px;text-decoration:none}
+@media(max-width:390px){
+ .map-source{font-size:11px;padding:6px}
+ .map-fit{padding:3px 7px}
+ .map-canvas{min-height:245px}
+}
