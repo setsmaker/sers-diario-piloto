@@ -57,7 +57,11 @@ jobs:
           html=file.read_text()
           old='<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>'
           assert old in html
-          file.write_text(html.replace(old,'<script src="./leaflet.js" defer></script>'))
+          # Inyectamos la biblioteca dentro del HTML de la APK.
+          # Así no puede ser interceptada por un SW antiguo de la versión web.
+          leaflet=Path('android-reportajes/app/src/main/assets/web/reportajes/leaflet.js').read_text()
+          assert '</script' not in leaflet.lower()
+          file.write_text(html.replace(old,'<script>'+leaflet+'</script>'))
           PY
           cp zip.js "$ASSETS/zip.js"
           cp icons/icon-192.png icons/icon-512.png "$ASSETS/icons/"
