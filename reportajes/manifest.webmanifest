@@ -1,7 +1,7 @@
 {
-  "name": "SERS Reportajes Fotográficos",
-  "short_name": "SERS Reportajes",
-  "description": "Reportajes fotográficos e inventarios SERS con fotografías, dictado, GPS y orientación.",
+  "name": "SERS Photo",
+  "short_name": "SERS Photo",
+  "description": "Reportajes fotográficos e inventarios técnicos SERS. Captura rápida, GPS, brújula y descripciones.",
   "id": "/sers-diario-piloto/reportajes/",
   "start_url": "./",
   "scope": "./",
