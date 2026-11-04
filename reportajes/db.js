@@ -56,10 +56,22 @@ const ReportDB=(()=>{
   });
  }
  async function deleteReport(id){
-  const photos=await byReport(id);
-  // Borramos fotos una por una para que cualquier error quede visible.
-  for(const p of photos)await write('photos','delete',p.id);
-  await write('reports','delete',id);
+  // Transacción única: elimina el reportaje y todas sus fotos de forma atómica.
+  const db=await open();
+  return new Promise((resolve,reject)=>{
+   const tx=db.transaction(['reports','photos','drafts'],'readwrite');
+   const index=tx.objectStore('photos').index('reportId');
+   const cursor=index.openCursor(IDBKeyRange.only(id));
+   cursor.onsuccess=()=>{if(cursor.result){cursor.result.delete();cursor.result.continue();}};
+   tx.objectStore('reports').delete(id);
+   const draftRequest=tx.objectStore('drafts').get('capture');
+   draftRequest.onsuccess=()=>{
+    if(draftRequest.result?.reportId===id)tx.objectStore('drafts').delete('capture');
+   };
+   tx.oncomplete=()=>{db.close();resolve();};
+   tx.onerror=()=>{db.close();reject(tx.error);};
+   tx.onabort=()=>{db.close();reject(tx.error||new Error('No se pudo eliminar el reportaje'));};
+  });
  }
  return {
   listReports:()=>all('reports'),
