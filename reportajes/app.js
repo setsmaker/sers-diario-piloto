@@ -6,6 +6,7 @@
   ('r'+Date.now().toString(36)+Math.random().toString(36).slice(2,11));
  const KEY='sers-reportajes-active-v1';
  let reports=[],activeId=localStorage.getItem(KEY)||'',photos=[],draft=null;
+ let selectedReportId=activeId,reportStats=new Map(),galleryOnlyMissing=false,lastPhotoUrl=null;
  let currentView='home',gps=null,gpsError='',heading=null,watchId=null,dictation=null,dictating=false,cameraStart=null;
  let draftQueue=Promise.resolve(),draftTimer=null,toastTimer=null,captureUrl=null,dialogUrl=null,dialogPhotoId=null,cardUrls=[],leafletMap=null,leafletLayers=null;
  let mapBaseLayer=null,mapPhotoMarkers=new Map(),mapPhotoUrls=[],mapFocusBounds=null,mapLocated=[];
@@ -54,45 +55,97 @@
   if(!reports.some(r=>r.id===activeId))activeId=reports[0]?.id||'';
   if(activeId)localStorage.setItem(KEY,activeId);
   photos=activeId?await ReportDB.photosByReport(activeId):[];
+  reportStats=new Map();
+  for(const p of await ReportDB.allPhotos()){
+   const st=reportStats.get(p.reportId)||{count:0,missing:0};
+   st.count++;
+   if(!String(p.description||'').trim())st.missing++;
+   reportStats.set(p.reportId,st);
+  }
+  if(!reports.some(r=>r.id===selectedReportId))selectedReportId=reports[0]?.id||'';
  }
  async function saveReport(report){
   report.updatedAt=now();await ReportDB.saveReport(report);
   await reload();
  }
+ const reportStat=id=>reportStats.get(id)||{count:0,missing:0};
+ function setReportSelection(id){
+  if(!reports.some(r=>r.id===id))return;
+  selectedReportId=id;
+  renderHome();
+ }
+ function selectedReport(){return reports.find(r=>r.id===selectedReportId)||null;}
+ function selectedStatsText(r){
+  const st=reportStat(r.id);
+  return st.count+' fotos · '+(st.count-st.missing)+' descritas'+
+   (st.missing?' · '+st.missing+' pendientes':'')+
+   ' · '+dateNice(r.updatedAt)+(r.closedAt?' · Finalizado':' · En curso');
+ }
  function renderHome(){
-  const box=$('recentBox'),last=reports[0];
-  box.classList.toggle('hidden',!last);
-  $('allCount').textContent=reports.length+' en total';
+  const last=reports[0],recent=$('recentBox');
+  recent.classList.toggle('hidden',!last);
+  $('allCount').textContent=reports.length+' reportajes';
   if(last){
    $('recentName').textContent=last.name;
-   $('recentInfo').textContent=dateNice(last.updatedAt)+(last.closedAt?' · Finalizado':' · En curso');
-   $('recentCount').textContent=(last.photoCount||0)+' fotos';
+   $('recentInfo').textContent=last.closedAt?'Finalizado':'En curso';
+   $('recentCount').textContent=reportStat(last.id).count+' fotos';
   }
-  const holder=$('reportsList');holder.replaceChildren();
-  if(!reports.length){holder.append(doc('p','muted','Todavía no hay reportajes.'));return;}
-  for(const r of reports){
-   const line=doc('div','report-row');
-   const left=doc('div',''),name=doc('div','name',r.name),
-    desc=doc('p','',dateNice(r.updatedAt)+' · '+(r.photoCount||0)+' fotografías'+(r.closedAt?' · Finalizado':''));
-   left.append(name,desc);
-   const right=doc('div','report-actions'),open=doc('button','',r.closedAt?'Ver fotos':'Continuar');
-   open.addEventListener('click',()=>selectReport(r.id,r.closedAt?'gallery':'capture'));
-   const more=doc('button','text-report-action',r.closedAt?'Reabrir':'Finalizar');
-   more.addEventListener('click',async()=>{
-    if(!r.closedAt&&!confirm('¿Dar por finalizado este reportaje? Podrás reabrirlo.'))return;
-    const latest=await ReportDB.getReport(r.id);
-    if(!latest)return;
-    latest.closedAt=latest.closedAt?null:now();
-    await saveReport(latest);renderHome();
-   });
-   const shareB=doc('button','share-report-button','☁ Enviar a OneDrive');
-   shareB.addEventListener('click',()=>exportReport(r.id,shareB,true));
-   // El envío necesita el puente Android de la APK; la PWA conserva Exportar ZIP.
-   shareB.classList.toggle('hidden',!window.SersAndroid?.beginShareZip);
-   const exportB=doc('button','text-report-action','Exportar ZIP');
-   exportB.addEventListener('click',()=>exportReport(r.id,exportB,false));
-   right.append(open,more,shareB,exportB);line.append(left,right);holder.append(line);
+  if(!reports.length)$('newReportForm').classList.remove('hidden');
+  const holder=$('reportsList'),search=$('reportSearch').value.trim().toLocaleLowerCase('es');
+  holder.replaceChildren();
+  const matched=reports.filter(r=>r.name.toLocaleLowerCase('es').includes(search));
+  if(!matched.length)holder.append(doc('p','muted empty',
+    reports.length?'No hay reportajes con ese nombre.':'Crea tu primer reportaje.'));
+  for(const r of matched){
+   const selected=r.id===selectedReportId;
+   const row=doc('button','report-select'+(selected?' selected':''));
+   row.type='button';row.role='option';row.setAttribute('aria-selected',String(selected));
+   const radio=doc('span','report-radio',selected?'●':'○');
+   const text=doc('span','report-select-info');
+   text.append(doc('strong','',r.name),doc('small','',selectedStatsText(r)));
+   const indicator=doc('span','report-chevron',selected?'✓':'›');
+   row.append(radio,text,indicator);
+   row.addEventListener('click',()=>setReportSelection(r.id));
+   holder.append(row);
   }
+  const sel=selectedReport();
+  $('selectedReportActions').classList.toggle('hidden',!sel);
+  if(!sel)return;
+  $('selectedReportName').textContent=sel.name;
+  $('selectedReportMeta').textContent=selectedStatsText(sel);
+  const st=reportStat(sel.id);
+  $('actionCapture').textContent=sel.closedAt?'↻ Reabrir':'📷 Seguir fotografiando';
+  $('actionToggleClosed').textContent=sel.closedAt?'Reabrir reportaje':'Finalizar reportaje';
+  $('actionShare').classList.toggle('hidden',!window.SersAndroid?.beginShareZip);
+  const pending=$('actionPending');
+  pending.classList.toggle('hidden',st.missing===0);
+  pending.textContent='⚠ '+st.missing+' foto'+(st.missing!==1?'s':'')+
+   ' sin descripción · Revisar';
+ }
+ async function toggleSelectedClosed(){
+  const r=selectedReport();if(!r)return;
+  if(!r.closedAt&&!confirm('¿Finalizar «'+r.name+'»? Después podrás reabrirlo.'))return;
+  const fresh=await ReportDB.getReport(r.id);
+  if(!fresh)return;
+  fresh.closedAt=fresh.closedAt?null:now();
+  await saveReport(fresh);renderHome();
+ }
+ async function deleteSelectedReport(){
+  const r=selectedReport();if(!r)return;
+  const st=reportStat(r.id);
+  const label='«'+r.name+'» ('+st.count+' fotografías)';
+  if(!confirm('¿Eliminar DEFINITIVAMENTE el reportaje '+label+
+   ' y todas sus fotos de este móvil?\n\nNo se podrá deshacer. Puedes exportar ZIP antes.'))return;
+  try{
+   if(draft?.reportId===r.id){await saveDraftNow();draft=null;setCaptureUrl(null);}
+   await ReportDB.deleteReport(r.id);
+   if(activeId===r.id){activeId='';localStorage.removeItem(KEY);}
+   selectedReportId='';
+   galleryOnlyMissing=false;
+   await reload();
+   renderHome();
+   message('Reportaje eliminado del móvil. Las copias de OneDrive no se borran.');
+  }catch(error){console.error(error);message('No se pudo eliminar: '+String(error.message||error).slice(0,90));}
  }
  async function createReport(){
   const name=$('reportName').value.trim();
@@ -102,6 +155,8 @@
    await ReportDB.saveReport(r);
    $('reportName').value='';
    await reload();
+   selectedReportId=r.id;
+   $('newReportForm').classList.add('hidden');
    await selectReport(r.id,'capture');
    message('Reportaje creado. Ya puedes hacer fotografías.');
   }catch(error){console.error(error);message('No se pudo crear el reportaje en este móvil.');}
@@ -139,7 +194,7 @@
   if(draft?.file&&draft.reportId!==id){
    await saveDraftNow();
   }
-  activeId=id;localStorage.setItem(KEY,id);
+  activeId=id;selectedReportId=id;localStorage.setItem(KEY,id);
   photos=await ReportDB.photosByReport(id);
   chooseView(page);
  }
