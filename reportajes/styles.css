@@ -131,3 +131,65 @@ h1,h2,p{margin:0}.eyebrow{font-size:12px;color:var(--accent);font-weight:800;let
  .map-fit{padding:3px 7px}
  .map-canvas{min-height:245px}
 }
+
+/* SERS PHOTO v6: inicio y selección de reportajes compactos */
+.home-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px}
+.home-heading h1{font-size:clamp(24px,6vw,31px);line-height:1.13;margin:4px 0}
+.home-heading .btn{font-size:14px;min-height:44px;white-space:nowrap}
+.recent-compact{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 15px;margin:0 0 12px;border-radius:13px}
+.recent-details{min-width:0;flex:1}
+.recent-details>span:first-child{font-size:10px;letter-spacing:.09em;color:#cce4d5;font-weight:780}
+.recent-compact h2{margin:4px 0 2px;font-size:17px;line-height:1.2;overflow-wrap:anywhere}
+.recent-compact p{display:inline;font-size:12px;margin:0;color:#d7ecdd}
+.recent-compact .recent-count{font-size:12px;font-weight:760;color:#fff;display:inline;margin-left:7px}
+.recent-compact .btn.recent-open{background:#fff;color:#235138;font-size:13px;min-height:42px;white-space:nowrap;padding:8px 12px}
+.new-report-panel{margin:0 0 12px;padding:14px}
+.new-report-panel label{margin:0 0 8px}
+.new-report-panel input{margin:0 0 10px}
+.reports-panel{padding:14px;margin:0 0 12px}
+.report-list-heading{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.report-list-heading label{font-size:15px;font-weight:800;margin:0}
+.report-list-heading .muted{font-size:12px;white-space:nowrap}
+.report-search{display:block;width:100%;font-size:15px;min-height:42px;border:1.5px solid #b8cebf;background:#fafcfa;border-radius:9px;padding:8px 11px;margin:10px 0 8px;color:#1b4530}
+.reports-list{max-height:232px;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:5px;margin:0;padding:1px}
+.report-select{width:100%;display:flex;align-items:center;gap:9px;padding:10px 9px;text-align:left;
+ color:#234734;border:1px solid #d1dfd6;border-radius:10px;background:#f9fcfa;min-height:58px}
+.report-select.selected{background:#e2f1e7;border-color:#4e9771}
+.report-radio{color:#44815e;font-size:20px;flex:0 0 24px;text-align:center}
+.report-select-info{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}
+.report-select-info strong{font-size:14px;font-weight:800;white-space:normal;overflow-wrap:anywhere;line-height:1.25}
+.report-select-info small{font-size:11px;color:#587060;line-height:1.35}
+.report-chevron{font-size:19px;color:#2d7652;flex-shrink:0}
+.selected-actions{background:#f0f7f1;border:1px solid #bfdbc8;border-radius:12px;padding:12px;margin-top:11px}
+.selected-title>span{display:block;font-size:10px;font-weight:820;letter-spacing:.095em;color:#4a8a62}
+.selected-title strong{display:block;font-size:17px;line-height:1.25;margin:3px 0;overflow-wrap:anywhere}
+.selected-title p{font-size:12px;color:#5f7466;line-height:1.4;margin-bottom:10px}
+.selected-action-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.selected-action-grid .btn{min-height:44px;font-size:13px;padding:8px 5px}
+.pending-action{display:block;background:#fff4df;color:#765222;border:1px solid #ebc27b;border-radius:8px;
+ font-size:12px;font-weight:750;padding:9px;width:100%;text-align:left;margin-top:9px}
+.report-more{margin-top:9px;font-size:12px;color:#366a4b}
+.report-more summary{cursor:pointer;font-weight:750;padding:6px 0}
+.report-more>.btn{margin:7px 0 0;min-height:40px;font-size:13px}
+.import-details{margin:10px 0 0;padding:10px;border-radius:8px;font-size:12px}
+.import-details summary{font-weight:650}
+.gallery-controls{display:flex;gap:8px;margin:-5px 0 14px}
+.gallery-filter{background:#fff;border:1px solid #bdd2c4;border-radius:8px;padding:8px 12px;color:#376149;font-size:13px;font-weight:700}
+.gallery-filter.active{background:#315f46;border-color:#315f46;color:white}
+.photo-dialog .dialog-navigation{display:flex;align-items:center;justify-content:space-between;gap:9px;margin:10px 0}
+.dialog-navigation .icon-btn{border-radius:10px;font-size:30px;min-width:51px;height:42px}
+.dialog-navigation .btn{font-size:13px;min-height:42px;flex:1}
+.camera-area .last-photo{display:flex;align-items:center;gap:10px;width:min(100%,350px);text-align:left;
+ background:#fff;border:1px solid #c5d8c9;border-radius:10px;padding:6px 10px;color:#27523a}
+.last-photo img{width:49px;height:48px;object-fit:cover;border-radius:7px;background:#d8e7de}
+.last-photo span{min-width:0;display:flex;flex:1;flex-direction:column}
+.last-photo strong{font-size:12px}
+.last-photo small{font-size:11px;color:#65816b}
+.last-photo b{font-size:24px}
+.sers-cluster-marker{background:transparent!important;border:0!important}
+.sers-cluster-number{display:flex;align-items:center;justify-content:center;flex-direction:column;width:57px;height:47px;
+ border-radius:22px;background:#eaf5ed;color:#1e5738;border:3px solid #1b633d;box-shadow:0 2px 9px #173b27a6;
+ font-size:19px;font-weight:900;line-height:1.05}
+.sers-cluster-number small{font-size:10px;font-weight:800;margin-top:3px}
+.map-popup-open{width:100%;margin-top:9px;background:#2c6b49;color:white;border:0;border-radius:7px;padding:9px 5px;font-weight:780}
+@media(max-width:390px){.selected-action-grid .btn{font-size:12px}.recent-compact h2{font-size:15px}}
