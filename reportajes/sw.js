@@ -1,5 +1,5 @@
 'use strict';
-const CACHE='sers-reportajes-v4';
+const CACHE='sers-reportajes-v5';
 const ASSETS=['./','./index.html','./styles.css','./db.js','./app.js',
  './cloud.js','./import.js','./leaflet.css','./manifest.webmanifest','../zip.js',
  '../icons/icon-192.png','../icons/icon-512.png'];
