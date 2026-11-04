@@ -8,6 +8,9 @@
  let reports=[],activeId=localStorage.getItem(KEY)||'',photos=[],draft=null;
  let currentView='home',gps=null,gpsError='',heading=null,watchId=null,dictation=null,dictating=false,cameraStart=null;
  let draftQueue=Promise.resolve(),draftTimer=null,toastTimer=null,captureUrl=null,dialogUrl=null,dialogPhotoId=null,cardUrls=[],leafletMap=null,leafletLayers=null;
+ let mapBaseLayer=null,mapPhotoMarkers=new Map(),mapPhotoUrls=[],mapFocusBounds=null,mapLocated=[];
+ const MAP_SOURCE_KEY='sers-reportajes-map-source-v1';
+ let mapSource=localStorage.getItem(MAP_SOURCE_KEY)||'pnoa';
  const doc=(tag,cls,text)=>{
   const el=document.createElement(tag);
   if(cls)el.className=cls;
@@ -32,6 +35,7 @@
  function chooseView(name){
   const report=active();
   if(name!=='home'&&!report){name='home';message('Selecciona primero un reportaje.');}
+  if(currentView==='map'&&name!=='map')closeMap();
   currentView=name;
   document.body.classList.toggle('capture-mode',name==='capture');
   for(const page of ['home','capture','gallery','map']){
@@ -530,61 +534,224 @@
   }catch(e){console.error(e);message('No se pudo preparar el reportaje: '+String(e.message||e).slice(0,110));}
   finally{button.disabled=false;button.textContent=oldText;}
  }
- function renderMap(){
-  const report=active();if(!report)return;
-  const located=photos.filter(p=>p.position&&Number.isFinite(p.position.latitude)&&Number.isFinite(p.position.longitude));
-  const list=$('mapList');list.replaceChildren();
-  $('mapMessage').textContent=located.length+' de '+photos.length+' fotos con ubicación.'+
-   (navigator.onLine?'':' Sin conexión: el mapa puede no cargar.');
-  for(const p of photos){
-   const link=doc('a','map-entry');
-   const badge=doc('div','index','Nº '+labelNum(p.sequence));
-   const middle=doc('div','map-meta');
-   middle.append(doc('b','',p.description||'Sin descripción'),doc('br'),
-    doc('span','',p.position?'GPS ±'+Math.round(p.position.accuracy)+' m'+
-      (p.orientation?' · ≈'+Math.round(p.orientation.degrees)+'°':''):'Sin posición'));
-   link.append(badge,middle,doc('span','','→'));
-   if(p.position){
-    link.href='https://www.google.com/maps/search/?api=1&query='+p.position.latitude+','+p.position.longitude;
-    link.target='_blank';link.rel='noopener noreferrer';
-   }else{link.href='#';link.addEventListener('click',e=>{e.preventDefault();message('Esta fotografía no tiene posición GPS.');});}
-   list.append(link);
-  }
-  const box=$('mapCanvas');
-  if(!window.L||!navigator.onLine){
-   if(leafletMap){leafletMap.remove();leafletMap=null;}
-   box.replaceChildren(doc('p','empty muted',navigator.onLine?'El mapa no se ha podido cargar. Las coordenadas están disponibles abajo.':'Sin conexión. Las fotos siguen guardadas.'));
-   return;
-  }
-  if(leafletMap){leafletMap.remove();leafletMap=null;}
-  box.replaceChildren();
-  leafletMap=L.map(box,{zoomControl:true,attributionControl:true});
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+ const mapSourceNames={pnoa:'Ortofoto PNOA',ign:'Mapa IGN',osm:'Calles'};
+ const mapSources={
+  pnoa:{
+   url:'https://tms-pnoa-ma.idee.es/1.0.0/pnoa-ma/{z}/{x}/{-y}.jpeg',
+   attribution:'Ortofoto PNOA · © IGN/CNIG, CC BY 4.0',maxZoom:19,maxNativeZoom:19
+  },
+  ign:{
+   url:'https://tms-ign-base.idee.es/1.0.0/IGNBaseTodo/{z}/{x}/{-y}.jpeg',
+   attribution:'Mapa IGN · © IGN/CNIG, CC BY 4.0',maxZoom:19,maxNativeZoom:19
+  },
+  osm:{
+   url:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-   maxZoom:19
-  }).addTo(leafletMap);
-  if(!located.length){
-   leafletMap.setView([41.65,-0.88],12);
-  }else{
-   const bounds=[];
-   for(const p of located){
-    const latlng=[p.position.latitude,p.position.longitude],accuracy=Math.max(0,p.position.accuracy||0);
-    bounds.push(latlng);
-    L.circle(latlng,{radius:accuracy,color:accuracy<=10?'#2f8855':accuracy<=25?'#ca9a2e':'#bb5441',weight:1,
-      fillOpacity:.08}).addTo(leafletMap);
-    const marker=L.marker(latlng).addTo(leafletMap);
-    const boxPopup=doc('div');
-    boxPopup.append(doc('strong','', 'FOTO '+labelNum(p.sequence)),doc('br'),doc('span','',p.description||'Sin descripción'));
-    marker.bindPopup(boxPopup);
-    if(p.orientation){
-     const icon=L.divIcon({html:'<div class="arrow-marker" style="transform:rotate('+Math.round(p.orientation.degrees)+'deg)">↑</div>',
-      className:'',iconSize:[23,23],iconAnchor:[11,11]});
-     L.marker(latlng,{icon,interactive:false}).addTo(leafletMap);
+   maxZoom:19,maxNativeZoom:19
+  }
+ };
+ function mapToolbar(){
+  for(const key of ['pnoa','ign','osm']){
+   const id=key==='pnoa'?'mapAerial':key==='ign'?'mapIgn':'mapOsm';
+   const selected=mapSource===key;
+   $(id).classList.toggle('active',selected);
+   $(id).setAttribute('aria-pressed',String(selected));
+  }
+ }
+ function closeMap(){
+  if(leafletMap){
+   leafletMap.off();
+   leafletMap.remove();
+   leafletMap=null;
+  }
+  mapBaseLayer=null;leafletLayers=null;
+  mapPhotoMarkers.clear();mapFocusBounds=null;
+  for(const u of mapPhotoUrls)URL.revokeObjectURL(u);
+  mapPhotoUrls=[];
+ }
+ function mapStatus(text){
+  $('mapMessage').textContent=text;
+ }
+ function activateMapSource(which,userChosen=false){
+  if(!mapSources[which])which='pnoa';
+  mapSource=which;
+  if(userChosen)localStorage.setItem(MAP_SOURCE_KEY,which);
+  mapToolbar();
+  if(!leafletMap)return;
+  if(mapBaseLayer){
+   leafletMap.removeLayer(mapBaseLayer);
+   mapBaseLayer=null;
+  }
+  const cfg=mapSources[which],layer=L.tileLayer(cfg.url,{
+   attribution:cfg.attribution,
+   maxZoom:cfg.maxZoom,maxNativeZoom:cfg.maxNativeZoom,
+   updateWhenIdle:true,keepBuffer:1,
+   // El servicio IGN utiliza el índice TMS invertido {-y}.
+   errorTileUrl:undefined
+  });
+  mapBaseLayer=layer;
+  let errors=0,loads=0,fallbackStarted=false;
+  layer.on('tileload',()=>{
+   if(mapBaseLayer!==layer)return;
+   loads++;
+   if(loads===1)mapStatus(mapLocated.length+' de '+photos.length+
+    ' fotos con ubicación · '+mapSourceNames[which]+'. Pulsa los números para ver cada foto.');
+  });
+  layer.on('tileerror',()=>{
+   if(mapBaseLayer!==layer)return;
+   errors++;
+   if(errors>=3&&loads===0&&!fallbackStarted){
+    fallbackStarted=true;
+    const next=which==='pnoa'?'ign':which==='ign'?'osm':null;
+    if(next){
+     mapStatus(mapSourceNames[which]+' no responde. Probando '+mapSourceNames[next]+'…');
+     activateMapSource(next,false);
+    }else{
+     mapStatus('No se han podido descargar las teselas. Los números GPS siguen visibles; comprueba la conexión.');
     }
    }
-   leafletMap.fitBounds(bounds,{padding:[28,28],maxZoom:17});
+  });
+  layer.addTo(leafletMap);
+  // La cartografía se dibuja debajo de las fotografías numeradas.
+  layer.bringToBack();
+  mapStatus('Cargando '+mapSourceNames[which]+'… '+mapLocated.length+' fotos con GPS.');
+ }
+ function focusAllMapPhotos(){
+  if(!leafletMap)return;
+  leafletMap.invalidateSize({pan:false});
+  if(!mapLocated.length){
+   leafletMap.setView([41.65,-0.88],12,{animate:false});
+  }else if(mapLocated.length===1){
+   const p=mapLocated[0];
+   leafletMap.setView([p.position.latitude,p.position.longitude],18,{animate:false});
+  }else{
+   leafletMap.fitBounds(mapFocusBounds,{padding:[35,35],maxZoom:18,animate:false});
   }
-  setTimeout(()=>leafletMap?.invalidateSize(),150);
+ }
+ function focusMapPhoto(id){
+  const item=mapPhotoMarkers.get(id),record=photos.find(p=>p.id===id);
+  if(!item||!leafletMap||!record?.position)return;
+  leafletMap.invalidateSize({pan:false});
+  leafletMap.setView([record.position.latitude,record.position.longitude],
+   Math.max(17,leafletMap.getZoom()),{animate:false});
+  item.openPopup();
+  const selected=$('mapList').querySelector('[data-photo-id="'+id+'"]');
+  if(selected){
+   for(const el of $('mapList').querySelectorAll('.selected'))el.classList.remove('selected');
+   selected.classList.add('selected');
+  }
+ }
+ function renderMap(){
+  const report=active();if(!report)return;
+  mapLocated=photos.filter(p=>p.position&&Number.isFinite(p.position.latitude)&&
+   Number.isFinite(p.position.longitude)&&Math.abs(p.position.latitude)<=85);
+  const list=$('mapList');
+  list.replaceChildren();
+  for(const p of photos){
+   const row=doc('div','map-entry');
+   const button=doc('button','map-photo-button');
+   button.type='button';
+   button.dataset.photoId=p.id;
+   const num=doc('span','index','Nº '+labelNum(p.sequence));
+   const info=doc('span','map-meta');
+   info.append(doc('strong','',p.description||'Sin descripción'),doc('span','',
+    p.position?'GPS ±'+Math.round(p.position.accuracy)+' m'+
+      (p.orientation?' · 🧭 ≈'+Math.round(p.orientation.degrees)+'°':''):
+     'Sin posición'));
+   button.append(num,info);
+   button.addEventListener('click',()=>{
+    if(!p.position){message('Esta foto no tiene ubicación GPS.');return;}
+    if(leafletMap)focusMapPhoto(p.id);
+    else window.open('https://www.google.com/maps/search/?api=1&query='+
+       p.position.latitude+','+p.position.longitude,'_blank','noopener');
+   });
+   row.append(button);
+   if(p.position){
+    const google=doc('a','map-external','↗');
+    google.title='Abrir ubicación en Google Maps';
+    google.href='https://www.google.com/maps/search/?api=1&query='+
+      p.position.latitude+','+p.position.longitude;
+    google.target='_blank';google.rel='noopener noreferrer';
+    row.append(google);
+   }
+   list.append(row);
+  }
+  closeMap();
+  const box=$('mapCanvas');
+  mapToolbar();
+  if(!window.L||!navigator.onLine){
+   box.replaceChildren(doc('p','empty muted',navigator.onLine?
+    'El visor de mapas no está disponible. Puedes abrir cada posición en Google Maps.':
+    'Sin conexión. Las coordenadas de cada fotografía siguen guardadas.'));
+   mapStatus(mapLocated.length+' de '+photos.length+' fotos con ubicación GPS.');
+   return;
+  }
+  box.replaceChildren();
+  try{
+   leafletMap=L.map(box,{
+    zoomControl:true,attributionControl:true,
+    preferCanvas:false,zoomAnimation:false,markerZoomAnimation:false,
+    fadeAnimation:false,worldCopyJump:false
+   });
+   const bounds=[];
+   leafletLayers=L.layerGroup().addTo(leafletMap);
+   for(const p of mapLocated){
+    const latlng=[p.position.latitude,p.position.longitude];
+    bounds.push(latlng);
+    const accuracy=Math.max(0,Number(p.position.accuracy)||0);
+    L.circle(latlng,{
+     radius:accuracy,
+     color:accuracy<=10?'#2b9655':accuracy<=25?'#e6a426':'#e05e3f',
+     weight:2,fillOpacity:.12,interactive:false
+    }).addTo(leafletLayers);
+    const heading=Number(p.orientation?.degrees);
+    const validHeading=p.orientation&&Number.isFinite(heading);
+    // DivIcon con el número, sin depender de imágenes PNG remotas de Leaflet.
+    const icon=L.divIcon({
+     className:'sers-photo-marker',
+     html:'<span class="photo-marker-body"><b>'+labelNum(p.sequence)+'</b>'+
+       (validHeading?'<span class="photo-marker-heading" style="transform:rotate('+
+        (((heading%360)+360)%360)+'deg)">▲</span>':'')+'</span>',
+     iconSize:[44,46],iconAnchor:[22,23],popupAnchor:[0,-25]
+    });
+    const marker=L.marker(latlng,{icon,riseOnHover:true,keyboard:true,title:'Foto '+labelNum(p.sequence)})
+      .addTo(leafletLayers);
+    const content=doc('div','map-popup');
+    const photo=doc('img');
+    const url=URL.createObjectURL(p.file);mapPhotoUrls.push(url);
+    photo.src=url;photo.alt='Fotografía '+labelNum(p.sequence);
+    photo.loading='lazy';
+    content.append(doc('strong','', 'FOTO '+labelNum(p.sequence)),photo,
+     doc('p','',p.description||'Sin descripción'),
+     doc('small','', 'GPS ±'+Math.round(accuracy)+' m'+
+      (validHeading?' · Dirección ≈'+Math.round(heading)+'°':'')));
+    marker.bindPopup(content,{maxWidth:245,minWidth:160});
+    marker.on('click',()=>{
+     const row=list.querySelector('[data-photo-id="'+p.id+'"]');
+     if(row){
+      for(const el of list.querySelectorAll('.selected'))el.classList.remove('selected');
+      row.classList.add('selected');
+     }
+    });
+    mapPhotoMarkers.set(p.id,marker);
+   }
+   mapFocusBounds=bounds.length?L.latLngBounds(bounds):null;
+   // Primero el mapa, luego el ajuste sobre las fotos. InvalidateSize es
+   // imprescindible en WebView al cambiar de una pestaña oculta al mapa.
+   leafletMap.setView(bounds[0]||[41.65,-0.88],bounds.length?17:12,{animate:false});
+   activateMapSource(mapSource,false);
+   requestAnimationFrame(()=>{
+    if(!leafletMap)return;
+    focusAllMapPhotos();
+    setTimeout(()=>{if(leafletMap){leafletMap.invalidateSize({pan:false});focusAllMapPhotos();}},350);
+   });
+   mapStatus(mapLocated.length+' de '+photos.length+' fotos con ubicación GPS.');
+  }catch(e){
+   console.error('Error al iniciar visor',e);
+   closeMap();
+   box.replaceChildren(doc('p','empty muted','No se pudo mostrar el mapa. Puedes abrir cada foto en Google Maps.'));
+   mapStatus('Coordenadas disponibles: '+mapLocated.length+' de '+photos.length+'.');
+  }
  }
  async function boot(){
   network();
@@ -630,6 +797,10 @@
  $('dialogClose').addEventListener('click',closePhoto);
  $('dialogSave').addEventListener('click',editPhoto);
  $('dialogDelete').addEventListener('click',deletePhoto);
+ for(const [id,source] of [['mapAerial','pnoa'],['mapIgn','ign'],['mapOsm','osm']]){
+  $(id).addEventListener('click',()=>activateMapSource(source,true));
+ }
+ $('mapFit').addEventListener('click',focusAllMapPhotos);
  $('photoDialog').addEventListener('close',()=>{
   dialogPhotoId=null;if(dialogUrl)URL.revokeObjectURL(dialogUrl);dialogUrl=null;
  });
