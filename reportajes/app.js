@@ -790,6 +790,8 @@
   if(!leafletMap||!mapMarkerLayer)return;
   mapMarkerLayer.clearLayers();
   mapSpiderLayer?.clearLayers();
+  for(const u of mapPhotoUrls)URL.revokeObjectURL(u);
+  mapPhotoUrls=[];
   mapPhotoMarkers.clear();mapPhotoGroups.clear();
   // Agrupación en píxeles, no en coordenadas. Las coordenadas originales
   // se mantienen; al pulsar el grupo se separan solo los marcadores visuales.
@@ -985,18 +987,47 @@
   }
   try{
    await reload();
-   renderHome();
    const saved=await ReportDB.getDraft();
    if(saved?.file){
     const report=reports.find(r=>r.id===saved.reportId);
-    if(report){activeId=report.id;localStorage.setItem(KEY,activeId);}
+    if(report){activeId=report.id;selectedReportId=report.id;localStorage.setItem(KEY,activeId);photos=await ReportDB.photosByReport(activeId);}
    }
+   renderHome();
   }catch(e){console.error(e);message('No se pudo abrir el almacenamiento del móvil.');}
  }
  $('createReport').addEventListener('click',createReport);
  $('importReportBtn').addEventListener('click',()=>$('importZipInput').click());
  $('importZipInput').addEventListener('change',importReport);
- $('resumeRecent').addEventListener('click',()=>reports[0]&&selectReport(reports[0].id,reports[0].closedAt?'gallery':'capture'));
+ $('newReportToggle').addEventListener('click',()=>{
+  const form=$('newReportForm');
+  form.classList.toggle('hidden');
+  if(!form.classList.contains('hidden')){$('reportName').focus();form.scrollIntoView({block:'nearest',behavior:'smooth'});}
+ });
+ $('reportSearch').addEventListener('input',renderHome);
+ $('resumeRecent').addEventListener('click',()=>reports[0]&&selectReport(reports[0].id,
+  reports[0].closedAt?'gallery':'capture'));
+ $('actionView').addEventListener('click',()=>{
+  const r=selectedReport();if(!r)return;
+  galleryOnlyMissing=false;selectReport(r.id,'gallery');
+ });
+ $('actionCapture').addEventListener('click',async()=>{
+  const r=selectedReport();if(!r)return;
+  if(r.closedAt){const fresh=await ReportDB.getReport(r.id);
+   if(fresh){fresh.closedAt=null;await saveReport(fresh);}}
+  await selectReport(r.id,'capture');
+ });
+ $('actionShare').addEventListener('click',()=>{
+  const r=selectedReport();if(r)exportReport(r.id,$('actionShare'),true);
+ });
+ $('actionExport').addEventListener('click',()=>{
+  const r=selectedReport();if(r)exportReport(r.id,$('actionExport'),false);
+ });
+ $('actionPending').addEventListener('click',()=>{
+  const r=selectedReport();if(!r)return;
+  galleryOnlyMissing=true;selectReport(r.id,'gallery');
+ });
+ $('actionToggleClosed').addEventListener('click',toggleSelectedClosed);
+ $('actionDelete').addEventListener('click',deleteSelectedReport);
  for(const name of ['home','capture','gallery','map']){
   $('nav'+name[0].toUpperCase()+name.slice(1)).addEventListener('click',()=>chooseView(name));
  }
