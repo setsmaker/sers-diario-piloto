@@ -10,29 +10,47 @@
 <link rel="apple-touch-icon" href="../icons/icon-192.png">
 <link rel="stylesheet" href="./leaflet.css">
 <link rel="stylesheet" href="./styles.css">
-<title>SERS · Reportajes</title>
+<title>SERS Photo</title>
 </head>
 <body>
 <header class="topbar">
- <div class="brand"><img src="../icons/icon-192.png" alt="" width="30" height="30"><strong>SERS <span>REPORTAJES</span></strong></div>
+ <div class="brand"><img src="../icons/icon-192.png" alt="" width="30" height="30"><strong>SERS <span>PHOTO</span></strong></div>
  <div id="netBadge" class="net">Comprobando…</div>
 </header>
 <main>
 <section id="homeView" class="view">
- <div class="intro"><span class="eyebrow">REPORTAJES FOTOGRÁFICOS</span><h1>Fotografía. Describe. Continúa.</h1><p>Las fotos y notas se guardan en este móvil. Trabaja sin cobertura y sincroniza después.</p></div>
- <div id="recentBox" class="recent hidden"><div class="recent-top"><span>ÚLTIMO REPORTAJE</span><span id="recentCount"></span></div><h2 id="recentName"></h2><p id="recentInfo"></p><button class="btn primary xl" id="resumeRecent">Continuar reportaje <span>→</span></button></div>
- <div class="panel">
-  <h2>Nuevo reportaje</h2>
-  <label for="reportName">Nombre del reportaje</label>
-  <input id="reportName" maxlength="150" placeholder="Ej. Anteproyecto paseo Constitución">
-  <button id="createReport" class="btn primary full">+ Crear reportaje</button>
+ <div class="home-heading"><div><span class="eyebrow">ARCHIVO FOTOGRÁFICO</span><h1>Mis reportajes</h1></div><button id="newReportToggle" class="btn primary">+ Nuevo</button></div>
+ <div id="recentBox" class="recent recent-compact hidden">
+  <div class="recent-details"><span>ÚLTIMO REPORTAJE</span><h2 id="recentName"></h2>
+   <p id="recentInfo"></p><span id="recentCount" class="recent-count"></span></div>
+  <button id="resumeRecent" class="btn recent-open">Abrir →</button>
  </div>
- <div class="panel">
-  <div class="title-row"><h2>Mis reportajes</h2><span id="allCount" class="muted"></span></div>
-  <div id="reportsList" class="reports-list"><p class="muted">Todavía no hay reportajes.</p></div>
+ <div id="newReportForm" class="panel new-report-panel hidden">
+  <label for="reportName">Nombre del nuevo reportaje</label>
+  <input id="reportName" maxlength="150" placeholder="Ej. Anteproyecto paseo Constitución">
+  <button id="createReport" class="btn primary full">Crear y fotografiar →</button>
+ </div>
+ <div class="panel reports-panel">
+  <div class="report-list-heading"><label for="reportSearch">Selecciona un reportaje</label><span id="allCount" class="muted"></span></div>
+  <input id="reportSearch" class="report-search" type="search" placeholder="Buscar por nombre…" autocomplete="off">
+  <div id="reportsList" class="reports-list" role="listbox" aria-label="Reportajes guardados"><p class="muted">Todavía no hay reportajes.</p></div>
+  <div id="selectedReportActions" class="selected-actions hidden">
+   <div class="selected-title"><span>SELECCIONADO</span><strong id="selectedReportName"></strong><p id="selectedReportMeta"></p></div>
+   <div class="selected-action-grid">
+    <button id="actionView" class="btn outline">▧ Ver fotos</button>
+    <button id="actionCapture" class="btn primary">📷 Reabrir</button>
+    <button id="actionShare" class="btn primary">☁ OneDrive</button>
+    <button id="actionExport" class="btn outline">↓ Exportar ZIP</button>
+   </div>
+   <button id="actionPending" class="pending-action hidden" type="button"></button>
+   <details class="report-more"><summary>Más opciones</summary>
+    <button id="actionToggleClosed" class="btn outline full">Finalizar reportaje</button>
+    <button id="actionDelete" class="btn danger full">🗑 Eliminar reportaje</button>
+   </details>
+  </div>
   <details class="setup import-details">
-   <summary>Recuperar un reportaje desde una copia ZIP</summary>
-   <p class="small muted">Solo para recuperar fotografías y descripciones guardadas anteriormente. No afecta a otros reportajes.</p>
+   <summary>Recuperar reportaje desde ZIP</summary>
+   <p class="small muted">Permite restaurar las fotos y descripciones de una copia.</p>
    <button id="importReportBtn" type="button" class="btn outline full">Importar copia ZIP</button>
   </details>
  </div>
@@ -64,6 +82,7 @@
  <div id="captureEmpty" class="camera-area">
   <button id="cameraButton" class="camera-button"><span class="camera-symbol">📷</span><strong>HACER FOTOGRAFÍA</strong><small>Abrir cámara del móvil</small></button>
   <button id="galleryPick" class="text-button">Elegir de la galería</button>
+  <button id="captureLast" class="last-photo hidden" type="button"><img id="captureLastImg" alt="Última fotografía guardada"><span><strong id="captureLastTitle">Última fotografía</strong><small>Ver y comprobar</small></span><b>›</b></button>
  </div>
  <div id="captureFilled" class="hidden">
   <div class="preview-wrap"><img id="capturePreview" alt="Vista previa de la fotografía"><div id="photoLocationInfo" class="photo-overlay" aria-live="polite"></div><button id="replacePhoto" class="preview-change">↻ Repetir</button></div>
@@ -77,6 +96,7 @@
 </section>
 <section id="galleryView" class="view hidden">
  <div class="page-heading"><div><span class="eyebrow">REPORTAJE</span><h1>Galería fotográfica</h1><p id="gallerySubtitle" class="muted"></p></div></div>
+ <div class="gallery-controls"><button id="galleryShowAll" type="button" class="gallery-filter active" aria-pressed="true">Todas</button><button id="galleryMissing" type="button" class="gallery-filter" aria-pressed="false">Sin descripción <span id="galleryMissingCount"></span></button></div>
  <div id="galleryList" class="gallery-grid"></div>
  <p id="galleryEmpty" class="empty muted">Este reportaje todavía no tiene fotografías.</p>
 </section>
@@ -107,6 +127,7 @@
  <div class="dialog-head"><strong id="dialogTitle">Fotografía</strong><button id="dialogClose" class="icon-btn" aria-label="Cerrar">✕</button></div>
  <img id="dialogPhoto" alt="Fotografía ampliada">
  <p id="dialogMeta" class="small muted"></p>
+ <div class="dialog-navigation"><button id="dialogPrev" class="icon-btn" type="button" aria-label="Fotografía anterior">‹</button><button id="dialogLocate" type="button" class="btn outline">⌖ Ver en mapa</button><button id="dialogNext" class="icon-btn" type="button" aria-label="Fotografía siguiente">›</button></div>
  <label for="dialogDescription">Descripción original</label>
  <textarea id="dialogDescription" rows="5"></textarea>
  <div class="button-row"><button id="dialogDelete" class="btn danger">Eliminar foto</button><button id="dialogSave" class="btn primary">Guardar cambios</button></div>
