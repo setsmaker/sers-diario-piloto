@@ -6,7 +6,7 @@
   ('r'+Date.now().toString(36)+Math.random().toString(36).slice(2,11));
  const KEY='sers-reportajes-active-v1';
  let reports=[],activeId=localStorage.getItem(KEY)||'',photos=[],draft=null;
- let selectedReportId=activeId,reportStats=new Map(),galleryOnlyMissing=false,lastPhotoUrl=null;
+ let selectedReportId=activeId,reportStats=new Map(),galleryOnlyMissing=false,lastPhotoUrl=null,pendingMapPhotoId=null;
  let currentView='home',gps=null,gpsError='',heading=null,watchId=null,dictation=null,dictating=false,cameraStart=null;
  let draftQueue=Promise.resolve(),draftTimer=null,toastTimer=null,captureUrl=null,dialogUrl=null,dialogPhotoId=null,cardUrls=[],leafletMap=null,leafletLayers=null;
  let mapBaseLayer=null,mapPhotoMarkers=new Map(),mapPhotoUrls=[],mapFocusBounds=null,mapLocated=[];
@@ -324,8 +324,19 @@
   note.append(metaLine,geoLine,dirLine);
   note.className='photo-overlay '+gpsClass(p?.accuracy);
  }
+ function renderLastPhoto(){
+  const last=photos.at(-1),button=$('captureLast');
+  button.classList.toggle('hidden',!last);
+  if(last){
+   if(lastPhotoUrl)URL.revokeObjectURL(lastPhotoUrl);
+   lastPhotoUrl=URL.createObjectURL(last.file);
+   $('captureLastImg').src=lastPhotoUrl;
+   $('captureLastTitle').textContent='Última: foto '+labelNum(last.sequence);
+  }else if(lastPhotoUrl){URL.revokeObjectURL(lastPhotoUrl);lastPhotoUrl=null;}
+ }
  function renderDraft(){
   const hasFile=Boolean(draft?.file);
+  renderLastPhoto();
   $('captureEmpty').classList.toggle('hidden',hasFile);
   $('captureFilled').classList.toggle('hidden',!hasFile);
   setCaptureUrl(hasFile?draft.file:null);
@@ -465,9 +476,18 @@
  function renderGallery(){
   const report=active();if(!report)return;
   $('gallerySubtitle').textContent=report.name+' · '+photos.length+' fotografías';
-  $('galleryEmpty').classList.toggle('hidden',photos.length>0);
+  const missingCount=photos.filter(p=>!String(p.description||'').trim()).length;
+  $('galleryMissingCount').textContent=missingCount?'('+missingCount+')':'';
+  $('galleryShowAll').classList.toggle('active',!galleryOnlyMissing);
+  $('galleryMissing').classList.toggle('active',galleryOnlyMissing);
+  $('galleryShowAll').setAttribute('aria-pressed',String(!galleryOnlyMissing));
+  $('galleryMissing').setAttribute('aria-pressed',String(galleryOnlyMissing));
+  const visible=galleryOnlyMissing?photos.filter(p=>!String(p.description||'').trim()):photos;
+  $('galleryEmpty').classList.toggle('hidden',visible.length>0);
+  $('galleryEmpty').textContent=galleryOnlyMissing?'No quedan fotografías sin descripción.':
+   'Este reportaje todavía no tiene fotografías.';
   clearCardUrls();const holder=$('galleryList');holder.replaceChildren();
-  for(const p of photos){
+  for(const p of visible){
    const card=doc('button','photo-card');
    const url=URL.createObjectURL(p.file);cardUrls.push(url);
    const img=doc('img');img.src=url;img.loading='lazy';img.alt='Foto '+labelNum(p.sequence);
@@ -490,7 +510,11 @@
   $('dialogMeta').textContent=dateNice(p.capturedAt)+' · '+timeNice(p.capturedAt)+
    (p.position?' · GPS ±'+Math.round(p.position.accuracy)+' m':' · Sin GPS')+
    (p.orientation?' · 🧭 ≈'+Math.round(p.orientation.degrees)+'°':' · Sin rumbo');
-  $('photoDialog').showModal();
+  const i=photos.findIndex(x=>x.id===p.id);
+  $('dialogPrev').disabled=i<=0;
+  $('dialogNext').disabled=i>=photos.length-1;
+  $('dialogLocate').disabled=!p.position;
+  if(!$('photoDialog').open)$('photoDialog').showModal();
  }
  function closePhoto(){
   $('photoDialog').close();
@@ -498,20 +522,40 @@
   if(dialogUrl)URL.revokeObjectURL(dialogUrl);
   dialogUrl=null;
  }
- async function editPhoto(){
-  if(!dialogPhotoId)return;
+ async function saveOpenPhotoChanges(){
+  if(!dialogPhotoId)return false;
   const p=photos.find(x=>x.id===dialogPhotoId);
-  if(!p)return;
+  if(!p)return false;
   const newText=$('dialogDescription').value;
-  if(p.description===newText){closePhoto();return;}
+  if(p.description===newText)return true;
+  await ReportDB.savePhoto({...p,description:newText,updatedAt:now()});
+  const report=await ReportDB.getReport(p.reportId);
+  if(report)await ReportDB.saveReport({...report,updatedAt:now()});
+  await reload();
+  window.dispatchEvent(new CustomEvent('sers-reportajes:saved',{detail:{id:p.id,reportId:p.reportId}}));
+  return true;
+ }
+ async function editPhoto(){
   try{
-   await ReportDB.savePhoto({...p,description:newText,updatedAt:now()});
-   const report=await ReportDB.getReport(p.reportId);
-   if(report)await ReportDB.saveReport({...report,updatedAt:now()});
-   closePhoto();await reload();renderGallery();
-   window.dispatchEvent(new CustomEvent('sers-reportajes:saved',{detail:{id:p.id,reportId:p.reportId}}));
-   message('Descripción actualizada.');
-  }catch(e){message('Error al guardar descripción.');}
+   await saveOpenPhotoChanges();closePhoto();renderGallery();
+   message('Descripción guardada.');
+  }catch(e){console.error(e);message('Error al guardar descripción.');}
+ }
+ async function stepPhoto(direction){
+  if(!dialogPhotoId)return;
+  const i=photos.findIndex(p=>p.id===dialogPhotoId);
+  const target=photos[i+direction];if(!target)return;
+  try{await saveOpenPhotoChanges();showPhoto(target.id);}
+  catch(e){message('No se pudieron guardar los cambios.');}
+ }
+ async function locateOpenPhoto(){
+  const id=dialogPhotoId,p=photos.find(x=>x.id===id);
+  if(!p?.position)return;
+  try{await saveOpenPhotoChanges();}
+  catch(e){message('No se pudo guardar la descripción.');return;}
+  closePhoto();
+  pendingMapPhotoId=id;
+  chooseView('map');
  }
  async function deletePhoto(){
   const p=photos.find(x=>x.id===dialogPhotoId);
@@ -909,6 +953,12 @@
  $('dialogClose').addEventListener('click',closePhoto);
  $('dialogSave').addEventListener('click',editPhoto);
  $('dialogDelete').addEventListener('click',deletePhoto);
+ $('dialogPrev').addEventListener('click',()=>stepPhoto(-1));
+ $('dialogNext').addEventListener('click',()=>stepPhoto(1));
+ $('dialogLocate').addEventListener('click',locateOpenPhoto);
+ $('captureLast').addEventListener('click',()=>photos.length&&showPhoto(photos.at(-1).id));
+ $('galleryShowAll').addEventListener('click',()=>{galleryOnlyMissing=false;renderGallery();});
+ $('galleryMissing').addEventListener('click',()=>{galleryOnlyMissing=true;renderGallery();});
  for(const [id,source] of [['mapAerial','pnoa'],['mapIgn','ign'],['mapOsm','osm']]){
   $(id).addEventListener('click',()=>activateMapSource(source,true));
  }
