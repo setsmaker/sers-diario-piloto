@@ -70,9 +70,12 @@
   await reload();
  }
  const reportStat=id=>reportStats.get(id)||{count:0,missing:0};
- function setReportSelection(id){
+ async function setReportSelection(id){
   if(!reports.some(r=>r.id===id))return;
   selectedReportId=id;
+  activeId=id;
+  localStorage.setItem(KEY,id);
+  photos=await ReportDB.photosByReport(id);
   renderHome();
  }
  function selectedReport(){return reports.find(r=>r.id===selectedReportId)||null;}
