@@ -39,8 +39,26 @@ jobs:
           set -euo pipefail
           ASSETS="android-reportajes/app/src/main/assets/web"
           mkdir -p "$ASSETS/reportajes" "$ASSETS/icons" android-reportajes/app/src/main/res/drawable-nodpi
-          cp reportajes/index.html reportajes/styles.css reportajes/db.js reportajes/app.js \
+          cp reportajes/index.html reportajes/styles.css reportajes/leaflet.css reportajes/db.js reportajes/app.js \
             reportajes/cloud.js reportajes/import.js reportajes/sw.js reportajes/manifest.webmanifest "$ASSETS/reportajes/"
+          # Cargar Leaflet desde el propio APK: evita fallos de CDN y funciona
+          # incluso sin conexión, aunque los mapas raster sí requieren Internet.
+          curl -fLsS --retry 3 --connect-timeout 20 --max-time 120 \
+            'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js' \
+            -o "$ASSETS/reportajes/leaflet.js" || \
+          curl -fLsS --retry 3 --connect-timeout 20 --max-time 120 \
+            'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js' \
+            -o "$ASSETS/reportajes/leaflet.js"
+          ACTUAL="$(openssl dgst -sha256 -binary "$ASSETS/reportajes/leaflet.js" | base64 -w0)"
+          test "$ACTUAL" = '20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo='
+          python3 - <<'PY'
+          from pathlib import Path
+          file=Path('android-reportajes/app/src/main/assets/web/reportajes/index.html')
+          html=file.read_text()
+          old='<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>'
+          assert old in html
+          file.write_text(html.replace(old,'<script src="./leaflet.js" defer></script>'))
+          PY
           cp zip.js "$ASSETS/zip.js"
           cp icons/icon-192.png icons/icon-512.png "$ASSETS/icons/"
           cp icons/icon-192.png android-reportajes/app/src/main/res/drawable-nodpi/ic_launcher.png
@@ -49,24 +67,24 @@ jobs:
       - name: Preparar APK con nombre de instalación
         run: |
           mkdir -p dist
-          cp android-reportajes/app/build/outputs/apk/debug/app-debug.apk dist/SERS_Reportajes_v3.apk
-          test -s dist/SERS_Reportajes_v3.apk
+          cp android-reportajes/app/build/outputs/apk/debug/app-debug.apk dist/SERS_Reportajes_v4.apk
+          test -s dist/SERS_Reportajes_v4.apk
       - name: Adjuntar APK a GitHub Actions
         uses: actions/upload-artifact@v4
         with:
           name: SERS-Reportajes-APK
-          path: dist/SERS_Reportajes_v3.apk
+          path: dist/SERS_Reportajes_v4.apk
       - name: Publicar APK de prueba en GitHub Releases
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          TAG="sers-reportajes-v3"
+          TAG="sers-reportajes-v4"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/SERS_Reportajes_v3.apk --clobber
+            gh release upload "$TAG" dist/SERS_Reportajes_v4.apk --clobber
           else
-            gh release create "$TAG" dist/SERS_Reportajes_v3.apk \
-              --title "SERS Reportajes · APK de prueba v3" \
+            gh release create "$TAG" dist/SERS_Reportajes_v4.apk \
+              --title "SERS Reportajes · APK de prueba v4" \
               --notes "APK Android independiente del Diario de Obra. Incorpora Enviar a OneDrive y pantalla de captura compacta con metadatos sobre la foto, GPS y brújula actualizados aproximadamente cada segundo. Captura, GPS, brújula, dictado, galería, mapa y exportación ZIP. APK de prueba; se recomienda no usar con información confidencial hasta validar seguridad y sincronización."
           fi
