@@ -11,6 +11,7 @@
  let mapBaseLayer=null,mapPhotoMarkers=new Map(),mapPhotoUrls=[],mapFocusBounds=null,mapLocated=[];
  const MAP_SOURCE_KEY='sers-reportajes-map-source-v1';
  let mapSource=localStorage.getItem(MAP_SOURCE_KEY)||'pnoa';
+ let leafletLoadPromise=null;
  const doc=(tag,cls,text)=>{
   const el=document.createElement(tag);
   if(cls)el.className=cls;
@@ -641,7 +642,56 @@
    selected.classList.add('selected');
   }
  }
- function renderMap(){
+ /**
+  * La versión web carga Leaflet por CDN; en la APK está incluida la librería.
+  * Si un service worker antiguo ha interceptado ./leaflet.js y devuelve 404,
+  * probar otro origen antes de descartar el mapa.
+  */
+ async function ensureLeaflet(){
+  if(window.L)return true;
+  if(!navigator.onLine)return false;
+  if(leafletLoadPromise)return leafletLoadPromise;
+  const sources=[
+   'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js',
+   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+  ];
+  leafletLoadPromise=(async()=>{
+   for(const src of sources){
+    if(window.L)return true;
+    mapStatus('Cargando visor del mapa…');
+    try{
+     await new Promise((resolve,reject)=>{
+      const script=doc('script');
+      const timer=setTimeout(()=>{script.remove();reject(new Error('Tiempo de espera agotado'));},11000);
+      script.src=src;
+      script.integrity='sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
+      script.crossOrigin='anonymous';
+      script.onload=()=>{clearTimeout(timer);resolve();};
+      script.onerror=()=>{clearTimeout(timer);script.remove();reject(new Error('Carga bloqueada'));};
+      document.head.append(script);
+     });
+     if(window.L)return true;
+    }catch(e){console.warn('No se pudo cargar Leaflet',src,String(e));}
+   }
+   return Boolean(window.L);
+  })();
+  const loaded=await leafletLoadPromise;
+  if(!loaded)leafletLoadPromise=null;
+  return loaded;
+ }
+ async function disableNativeServiceWorker(){
+  if(!window.SersAndroid?.beginShareZip||!('serviceWorker'in navigator))return;
+  try{
+   const registrations=await navigator.serviceWorker.getRegistrations();
+   const removed=await Promise.all(registrations.filter(r=>r.scope.includes('/sers-diario-piloto/reportajes/')).map(r=>r.unregister()));
+   if(removed.some(Boolean)&&navigator.serviceWorker.controller&&
+      sessionStorage.getItem('sers-reportajes-sw-reload-v5')!=='yes'){
+    sessionStorage.setItem('sers-reportajes-sw-reload-v5','yes');
+    window.location.reload();
+   }
+  }catch(error){console.warn('No se pudo limpiar el antiguo service worker',error);}
+ }
+ async function renderMap(){
   const report=active();if(!report)return;
   mapLocated=photos.filter(p=>p.position&&Number.isFinite(p.position.latitude)&&
    Number.isFinite(p.position.longitude)&&Math.abs(p.position.latitude)<=85);
@@ -679,11 +729,17 @@
   closeMap();
   const box=$('mapCanvas');
   mapToolbar();
+  if(navigator.onLine&&!window.L){
+   mapStatus('Preparando visor Leaflet…');
+   const loaded=await ensureLeaflet();
+   if(!loaded)console.warn('Leaflet no se ha podido inicializar. Se mantienen los enlaces GPS.');
+   if(currentView!=='map')return;
+  }
   if(!window.L||!navigator.onLine){
    box.replaceChildren(doc('p','empty muted',navigator.onLine?
-    'El visor de mapas no está disponible. Puedes abrir cada posición en Google Maps.':
+    'No se ha podido cargar Leaflet. Revisa la conexión. Las coordenadas y Google Maps siguen disponibles.':
     'Sin conexión. Las coordenadas de cada fotografía siguen guardadas.'));
-   mapStatus(mapLocated.length+' de '+photos.length+' fotos con ubicación GPS.');
+   mapStatus(mapLocated.length+' de '+photos.length+' fotos con ubicación GPS · visor no cargado.');
    return;
   }
   box.replaceChildren();
@@ -755,6 +811,7 @@
  }
  async function boot(){
   network();
+  disableNativeServiceWorker();
   // El envío nativo a OneDrive no requiere Microsoft Entra.
   // En la APK ocultamos el panel OAuth de la versión web, todavía experimental.
   if(window.SersAndroid?.beginShareZip){
@@ -810,7 +867,9 @@
   if(!document.hidden&&currentView==='capture'){startGPS();updateSensors();}
  });
  setInterval(()=>{if(currentView==='capture')updateSensors();},1000);
- if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js',{scope:'./'}).catch(console.warn);
+ if(!window.SersAndroid?.beginShareZip && 'serviceWorker'in navigator){
+  navigator.serviceWorker.register('./sw.js',{scope:'./'}).catch(console.warn);
+ }
  boot();
  window.SersReportajes={photoMeta,geojson,reportPhotos:()=>ReportDB.allPhotos(),reportList:()=>ReportDB.listReports()};
 })();
