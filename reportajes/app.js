@@ -10,6 +10,7 @@
  let currentView='home',gps=null,gpsError='',heading=null,watchId=null,dictation=null,dictating=false,cameraStart=null;
  let draftQueue=Promise.resolve(),draftTimer=null,toastTimer=null,captureUrl=null,dialogUrl=null,dialogPhotoId=null,cardUrls=[],leafletMap=null,leafletLayers=null;
  let mapBaseLayer=null,mapPhotoMarkers=new Map(),mapPhotoUrls=[],mapFocusBounds=null,mapLocated=[];
+ let mapMarkerLayer=null,mapSpiderLayer=null,mapPhotoGroups=new Map(),mapAccuracyLayer=null;
  const MAP_SOURCE_KEY='sers-reportajes-map-source-v1';
  let mapSource=localStorage.getItem(MAP_SOURCE_KEY)||'pnoa';
  let leafletLoadPromise=null;
@@ -664,8 +665,8 @@
    leafletMap.remove();
    leafletMap=null;
   }
-  mapBaseLayer=null;leafletLayers=null;
-  mapPhotoMarkers.clear();mapFocusBounds=null;
+  mapBaseLayer=null;leafletLayers=null;mapMarkerLayer=null;mapSpiderLayer=null;mapAccuracyLayer=null;
+  mapPhotoMarkers.clear();mapPhotoGroups.clear();mapFocusBounds=null;
   for(const u of mapPhotoUrls)URL.revokeObjectURL(u);
   mapPhotoUrls=[];
  }
@@ -728,18 +729,105 @@
    leafletMap.fitBounds(mapFocusBounds,{padding:[35,35],maxZoom:18,animate:false});
   }
  }
+ function highlightMapRow(id){
+  const list=$('mapList');
+  const target=list.querySelector('[data-photo-id="'+id+'"]');
+  for(const el of list.querySelectorAll('.selected'))el.classList.remove('selected');
+  if(target)target.classList.add('selected');
+ }
+ function makePhotoMapIcon(p){
+  const deg=Number(p.orientation?.degrees),hasCompass=p.orientation&&Number.isFinite(deg);
+  return L.divIcon({
+   className:'sers-photo-marker',
+   html:'<span class="photo-marker-body"><b>'+labelNum(p.sequence)+'</b>'+
+    (hasCompass?'<span class="photo-marker-heading" style="transform:rotate('+
+     (((deg%360)+360)%360)+'deg)">▲</span>':'')+'</span>',
+   iconSize:[44,46],iconAnchor:[22,23],popupAnchor:[0,-25]
+  });
+ }
+ function makePhotoPopup(p){
+  const content=doc('div','map-popup'),photo=doc('img');
+  const url=URL.createObjectURL(p.file);mapPhotoUrls.push(url);
+  photo.src=url;photo.alt='Foto '+labelNum(p.sequence);photo.loading='lazy';
+  const accuracy=Math.round(Number(p.position?.accuracy)||0);
+  const heading=Number(p.orientation?.degrees);
+  const btn=doc('button','map-popup-open','Ver fotografía en grande');
+  btn.type='button';btn.addEventListener('click',()=>showPhoto(p.id));
+  content.append(doc('strong','', 'FOTO '+labelNum(p.sequence)),
+   photo,doc('p','',p.description||'Sin descripción'),
+   doc('small','', 'GPS ±'+accuracy+' m'+(p.orientation&&Number.isFinite(heading)?
+    ' · 🧭 ≈'+Math.round(heading)+'°':'')),btn);
+  return content;
+ }
+ function makePhotoMapMarker(p,position){
+  const marker=L.marker(position||[p.position.latitude,p.position.longitude],{
+   icon:makePhotoMapIcon(p),riseOnHover:true,keyboard:true,
+   title:'Foto '+labelNum(p.sequence)
+  });
+  marker.bindPopup(makePhotoPopup(p),{maxWidth:250,minWidth:168});
+  marker.on('click',()=>highlightMapRow(p.id));
+  return marker;
+ }
+ function spiderfyGroup(group,openId=null){
+  if(!leafletMap||!mapSpiderLayer)return;
+  mapSpiderLayer.clearLayers();
+  const center=leafletMap.latLngToContainerPoint([group.center[0],group.center[1]]);
+  const n=group.photos.length;
+  const radius=Math.max(52,Math.min(115,34+9*n));
+  for(let i=0;i<n;i++){
+   const angle=2*Math.PI*i/n-Math.PI/2;
+   const point=L.point(center.x+Math.cos(angle)*radius,center.y+Math.sin(angle)*radius);
+   const placed=leafletMap.containerPointToLatLng(point);
+   const p=group.photos[i];
+   L.polyline([group.center,placed],{color:'#25593d',weight:2,opacity:.85,interactive:false})
+    .addTo(mapSpiderLayer);
+   const marker=makePhotoMapMarker(p,placed).addTo(mapSpiderLayer);
+   mapPhotoMarkers.set(p.id,marker);
+   if(openId===p.id)marker.openPopup();
+  }
+ }
+ function drawMapMarkers(){
+  if(!leafletMap||!mapMarkerLayer)return;
+  mapMarkerLayer.clearLayers();
+  mapSpiderLayer?.clearLayers();
+  mapPhotoMarkers.clear();mapPhotoGroups.clear();
+  // Agrupación en píxeles, no en coordenadas. Las coordenadas originales
+  // se mantienen; al pulsar el grupo se separan solo los marcadores visuales.
+  const groups=[];
+  for(const p of mapLocated){
+   const point=leafletMap.latLngToContainerPoint([p.position.latitude,p.position.longitude]);
+   let group=groups.find(g=>g.anchor.distanceTo(point)<49);
+   if(!group){group={anchor:point,photos:[],center:[p.position.latitude,p.position.longitude]};groups.push(group);}
+   group.photos.push(p);
+  }
+  for(const group of groups){
+   if(group.photos.length===1){
+    const p=group.photos[0],marker=makePhotoMapMarker(p).addTo(mapMarkerLayer);
+    mapPhotoMarkers.set(p.id,marker);
+   }else{
+    const count=group.photos.length;
+    const icon=L.divIcon({
+     className:'sers-cluster-marker',
+     html:'<span class="sers-cluster-number">'+count+'<small> fotos</small></span>',
+     iconSize:[61,49],iconAnchor:[30,24]
+    });
+    const cluster=L.marker(group.center,{icon,title:count+' fotos realizadas aquí'}).addTo(mapMarkerLayer);
+    cluster.on('click',()=>spiderfyGroup(group));
+    for(const p of group.photos)mapPhotoGroups.set(p.id,group);
+   }
+  }
+ }
  function focusMapPhoto(id){
-  const item=mapPhotoMarkers.get(id),record=photos.find(p=>p.id===id);
-  if(!item||!leafletMap||!record?.position)return;
+  const record=photos.find(p=>p.id===id);
+  if(!leafletMap||!record?.position)return;
   leafletMap.invalidateSize({pan:false});
   leafletMap.setView([record.position.latitude,record.position.longitude],
    Math.max(17,leafletMap.getZoom()),{animate:false});
-  item.openPopup();
-  const selected=$('mapList').querySelector('[data-photo-id="'+id+'"]');
-  if(selected){
-   for(const el of $('mapList').querySelectorAll('.selected'))el.classList.remove('selected');
-   selected.classList.add('selected');
-  }
+  drawMapMarkers();
+  const group=mapPhotoGroups.get(id);
+  if(group)spiderfyGroup(group,id);
+  else mapPhotoMarkers.get(id)?.openPopup();
+  highlightMapRow(id);
  }
  /**
   * La versión web carga Leaflet por CDN; en la APK está incluida la librería.
@@ -849,7 +937,9 @@
     fadeAnimation:false,worldCopyJump:false
    });
    const bounds=[];
-   leafletLayers=L.layerGroup().addTo(leafletMap);
+   mapAccuracyLayer=L.layerGroup().addTo(leafletMap);
+   mapMarkerLayer=L.layerGroup().addTo(leafletMap);
+   mapSpiderLayer=L.layerGroup().addTo(leafletMap);
    for(const p of mapLocated){
     const latlng=[p.position.latitude,p.position.longitude];
     bounds.push(latlng);
@@ -858,38 +948,9 @@
      radius:accuracy,
      color:accuracy<=10?'#2b9655':accuracy<=25?'#e6a426':'#e05e3f',
      weight:2,fillOpacity:.12,interactive:false
-    }).addTo(leafletLayers);
-    const heading=Number(p.orientation?.degrees);
-    const validHeading=p.orientation&&Number.isFinite(heading);
-    // DivIcon con el número, sin depender de imágenes PNG remotas de Leaflet.
-    const icon=L.divIcon({
-     className:'sers-photo-marker',
-     html:'<span class="photo-marker-body"><b>'+labelNum(p.sequence)+'</b>'+
-       (validHeading?'<span class="photo-marker-heading" style="transform:rotate('+
-        (((heading%360)+360)%360)+'deg)">▲</span>':'')+'</span>',
-     iconSize:[44,46],iconAnchor:[22,23],popupAnchor:[0,-25]
-    });
-    const marker=L.marker(latlng,{icon,riseOnHover:true,keyboard:true,title:'Foto '+labelNum(p.sequence)})
-      .addTo(leafletLayers);
-    const content=doc('div','map-popup');
-    const photo=doc('img');
-    const url=URL.createObjectURL(p.file);mapPhotoUrls.push(url);
-    photo.src=url;photo.alt='Fotografía '+labelNum(p.sequence);
-    photo.loading='lazy';
-    content.append(doc('strong','', 'FOTO '+labelNum(p.sequence)),photo,
-     doc('p','',p.description||'Sin descripción'),
-     doc('small','', 'GPS ±'+Math.round(accuracy)+' m'+
-      (validHeading?' · Dirección ≈'+Math.round(heading)+'°':'')));
-    marker.bindPopup(content,{maxWidth:245,minWidth:160});
-    marker.on('click',()=>{
-     const row=list.querySelector('[data-photo-id="'+p.id+'"]');
-     if(row){
-      for(const el of list.querySelectorAll('.selected'))el.classList.remove('selected');
-      row.classList.add('selected');
-     }
-    });
-    mapPhotoMarkers.set(p.id,marker);
+    }).addTo(mapAccuracyLayer);
    }
+   leafletMap.on('zoomend moveend',drawMapMarkers);
    mapFocusBounds=bounds.length?L.latLngBounds(bounds):null;
    // Primero el mapa, luego el ajuste sobre las fotos. InvalidateSize es
    // imprescindible en WebView al cambiar de una pestaña oculta al mapa.
@@ -898,7 +959,13 @@
    requestAnimationFrame(()=>{
     if(!leafletMap)return;
     focusAllMapPhotos();
-    setTimeout(()=>{if(leafletMap){leafletMap.invalidateSize({pan:false});focusAllMapPhotos();}},350);
+    drawMapMarkers();
+    setTimeout(()=>{
+     if(leafletMap){
+      leafletMap.invalidateSize({pan:false});focusAllMapPhotos();drawMapMarkers();
+      if(pendingMapPhotoId){const id=pendingMapPhotoId;pendingMapPhotoId=null;focusMapPhoto(id);}
+     }
+    },350);
    });
    mapStatus(mapLocated.length+' de '+photos.length+' fotos con ubicación GPS.');
   }catch(e){
