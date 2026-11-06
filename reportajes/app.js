@@ -369,7 +369,8 @@
   if(!draft?.file)return draftQueue;
   const copy={...draft};
   draftQueue=draftQueue.catch(()=>{}).then(async()=>{
-   await ReportDB.saveDraft(copy);
+   // Guardar primero la ficha externa; si falla IndexedDB la descripción,
+   // GPS y brújula siguen disponibles en Descargas.
    if(SersVault.available()&&copy.archivedName){
     const parent=await ReportDB.getReport(copy.reportId);
     if(parent)await SersVault.writePhoto({
@@ -381,6 +382,7 @@
      orientation:copy.orientation,recordState:'draft'
     },parent);
    }
+   await ReportDB.saveDraft(copy);
   });
   draftQueue.catch(e=>{
    console.error('Error guardando borrador o ficha',e);
@@ -424,8 +426,9 @@
   renderDraft();
   archiveStatus('Preparando copias de seguridad…','checking');
   try{
-   await saveDraftNow();
    archiveError=null;
+   // Copia externa primero: aunque falle IndexedDB, la foto y su ficha
+   // quedan independientes de la memoria interna de WebView.
    archivePromise=copyDraftToGallery(draft);
    await archivePromise;
   }catch(e){
