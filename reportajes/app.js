@@ -1199,8 +1199,8 @@
  // resultado del input HTML (algunos modelos Xiaomi no lo entregan).
  window.addEventListener('sers-native-photo',async event=>{
   const data=event.detail||{};
-  if(!data.photoId||!data.archivedName){
-   message('La cámara no ha devuelto una fotografía válida.');return;
+  if(!data.photoId){
+   message('La cámara no ha devuelto un identificador de fotografía.');return;
   }
   if(cameraStart?.photoId!==data.photoId){
    message('Fotografía guardada en Galería; vuelve al reportaje para recuperarla.');
@@ -1208,12 +1208,27 @@
   }
   archiveStatus('Leyendo fotografía de la Galería…','checking');
   try{
-   const file=await SersVault.readPhoto({
-    archivedName:data.archivedName,originalName:data.archivedName,
+   const metadata={
+    photoId:data.photoId,
+    archivedName:data.archivedName||null,
+    originalName:'SERS_'+data.photoId+'.jpg',
     mime:'image/jpeg',capturedAt:cameraStart.at
+   };
+   let file;
+   // La captura FileProvider es la fuente original, independiente
+   // de que Xiaomi tarde en indexar la imagen en MediaStore.
+   try{file=await SersVault.readCapturedPhoto(metadata);}
+   catch(localError){
+    if(!metadata.archivedName)throw localError;
+    file=await SersVault.readPhoto(metadata);
+   }
+   await photoSelected(null,'camera',{
+    file,photoId:data.photoId,archivedName:data.archivedName||null
    });
-   await photoSelected(null,'camera',{file,photoId:data.photoId,
-    archivedName:data.archivedName});
+   if(data.galleryError && !draft?.archivedName){
+    archiveStatus('⚠ Foto conservada localmente; error al copiar a Galería: '+
+      data.galleryError,'error');
+   }
   }catch(error){
    console.error('No se pudo abrir la foto nativa',error);
    message('La foto puede estar en Galería, pero no se pudo abrir: '+error.message);
