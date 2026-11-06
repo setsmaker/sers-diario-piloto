@@ -15,6 +15,12 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.IOException;
+
 import java.io.OutputStream;
 import java.io.FileInputStream;
 import java.nio.charset.StandardCharsets;
@@ -30,6 +36,7 @@ import java.util.Map;
  */
 public final class PhotoArchive {
     private final ContentResolver resolver;
+    private final Context context;
     private final Uri images = MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
     private final Uri downloads = MediaStore.Downloads.EXTERNAL_CONTENT_URI;
     private Uri pendingUri;
@@ -38,7 +45,7 @@ public final class PhotoArchive {
     private String pendingName;
     private String lastError = "";
 
-    public PhotoArchive(Context context) { resolver=context.getContentResolver(); }
+    public PhotoArchive(Context context) { this.context=context; resolver=context.getContentResolver(); }
 
     public synchronized String error() { return lastError; }
     private static String clean(String s) {
@@ -80,6 +87,114 @@ public final class PhotoArchive {
         }catch(Exception ignored){}
         return null;
     }
+    /**
+     * Cámara Xiaomi: escribir en un archivo propio con FileProvider primero.
+     * No entregar el URI MediaStore al fabricante de la cámara: en determinados
+     * dispositivos elimina la fila o la sustituye, produciendo FileNotFound.
+     * Este archivo persiste en Android/data/<paquete>/files/Pictures/SersCapture
+     * mientras la APK siga instalada, aunque falle la publicación en Galería.
+     */
+    public synchronized File prepareNativeCapture(String photoId) throws Exception {
+        if(photoId==null||!photoId.matches("[A-Za-z0-9_-]{1,150}"))
+            throw new Exception("Identificador de fotografía incorrecto.");
+        File root=context.getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+        if(root==null)throw new Exception("El almacenamiento de fotos no está disponible.");
+        File dir=new File(root,"SersCapture");
+        if(!dir.isDirectory()&&!dir.mkdirs())throw new Exception("No se pudo crear el directorio de cámara.");
+        File file=new File(dir,pictureName(photoId,"jpg"));
+        if(file.exists())throw new Exception("Esta fotografía ya tiene una captura guardada.");
+        try(FileOutputStream fd=new FileOutputStream(file)){fd.flush();}
+        return file;
+    }
+    public synchronized File getNativeCapture(String photoId) {
+        if(photoId==null||!photoId.matches("[A-Za-z0-9_-]{1,150}"))return null;
+        File base=context.getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+        if(base==null)return null;
+        return new File(new File(base,"SersCapture"),pictureName(photoId,"jpg"));
+    }
+    public synchronized long nativeCaptureSize(String photoId) {
+        File source=getNativeCapture(photoId);
+        return source!=null&&source.isFile()?source.length():-1;
+    }
+    public synchronized String copyReturnedUriToCapture(Uri imageUri,String photoId) {
+        File destination=getNativeCapture(photoId);
+        if(destination==null||imageUri==null)return "ERROR:No hay foto devuelta.";
+        try(InputStream input=resolver.openInputStream(imageUri);
+            OutputStream output=new FileOutputStream(destination,false)){
+            if(input==null)throw new IOException("No se puede abrir la fotografía devuelta por la cámara.");
+            byte[] buf=new byte[65536];int len;long total=0;
+            while((len=input.read(buf))>=0){
+                if(len>0){output.write(buf,0,len);total+=len;}
+                if(total>120*1024*1024)throw new IOException("La fotografía es demasiado grande.");
+            }
+            output.flush();
+            if(total<1024)throw new IOException("La fotografía devuelta está vacía.");
+            return "OK";
+        }catch(Exception error){lastError=error.toString();return "ERROR:"+lastError;}
+    }
+    public synchronized String publishCameraFile(String reportId,String reportName,String photoId){
+        lastError="";
+        File source=getNativeCapture(photoId);
+        if(source==null||!source.isFile()||source.length()<1024)
+            return "ERROR:La cámara no ha escrito una fotografía válida.";
+        String name=pictureName(photoId,"jpg");
+        Uri entry=null;
+        try{
+            // No borrar ni sobrescribir fotos públicas ya guardadas.
+            Uri existing=search(images,name,Environment.DIRECTORY_PICTURES+"/SERS Photo/");
+            if(existing!=null){
+                if(actualSize(existing)==source.length())return name;
+                return "ERROR:Hay una foto de igual nombre con contenido diferente.";
+            }
+            ContentValues values=new ContentValues();
+            values.put(MediaStore.MediaColumns.DISPLAY_NAME,name);
+            values.put(MediaStore.MediaColumns.MIME_TYPE,"image/jpeg");
+            values.put(MediaStore.MediaColumns.RELATIVE_PATH,photoDir(reportId,reportName));
+            values.put(MediaStore.MediaColumns.IS_PENDING,1);
+            entry=resolver.insert(images,values);
+            if(entry==null)throw new IOException("Android no creó la copia en Galería.");
+            long copied=0;
+            try(InputStream src=new BufferedInputStream(new FileInputStream(source));
+                OutputStream dst=new BufferedOutputStream(resolver.openOutputStream(entry,"w"))){
+                byte[] data=new byte[65536];int n;
+                while((n=src.read(data))!=-1){dst.write(data,0,n);copied+=n;}
+                dst.flush();
+            }
+            if(copied!=source.length())throw new IOException("La fotografía copiada está incompleta.");
+            // En MediaStore el archivo es nuestro: publicar únicamente tras
+            // haber cerrado su descriptor.
+            ContentValues done=new ContentValues();
+            done.put(MediaStore.MediaColumns.IS_PENDING,0);
+            if(resolver.update(entry,done,null,null)<1)
+                throw new IOException("No se confirmó la fotografía en Galería.");
+            if(actualSize(entry)!=source.length())
+                throw new IOException("La copia de Galería no tiene el tamaño correcto.");
+            return name;
+        }catch(Exception error){
+            lastError=error.toString();
+            // Nunca borrar la captura original. Si la copia pública es
+            // incompleta dejamos que Android la trate como pendiente.
+            return "ERROR:"+lastError;
+        }
+    }
+    public synchronized String readCaptureChunk(String photoId,long offset,int maxBytes) {
+        if(offset<0||maxBytes<1||maxBytes>192*1024)return "ERROR:Rango incorrecto.";
+        File file=getNativeCapture(photoId);
+        if(file==null||!file.isFile()||file.length()<1)return "ERROR:Captura no encontrada.";
+        try(InputStream in=new BufferedInputStream(new FileInputStream(file))){
+            long remaining=offset;
+            while(remaining>0){
+                long skipped=in.skip(remaining);
+                if(skipped<1){if(in.read()==-1)return "ERROR:Lectura incompleta";skipped=1;}
+                remaining-=skipped;
+            }
+            byte[] buf=new byte[maxBytes];int count=0,n;
+            while(count<maxBytes&&(n=in.read(buf,count,maxBytes-count))>0)count+=n;
+            if(count<1)return "";
+            return Base64.encodeToString(buf,0,count,Base64.NO_WRAP);
+        }catch(Exception e){lastError=e.toString();return "ERROR:"+lastError;}
+    }
+
     /** Cámara nativa: fotografía original directamente en Galería, no en caché. */
     public synchronized Uri startCamera(String reportId,String reportName,String photoId){
         lastError="";
