@@ -62,6 +62,8 @@ public class MainActivity extends Activity implements SensorEventListener {
     private String exportName;
     private boolean exportIsShare = false;
     private PhotoArchive archive;
+    private String preparedReportId,preparedReportName,preparedPhotoId;
+    private boolean cameraInGallery=false;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -141,17 +143,18 @@ public class MainActivity extends Activity implements SensorEventListener {
                 for (String accept : params.getAcceptTypes()) if (accept.startsWith("image")) image = true;
                 try {
                     if (image && params.isCaptureEnabled()) {
-                        File directory = new File(getCacheDir(), "camera");
-                        if (!directory.exists() && !directory.mkdirs()) throw new IllegalStateException("No se pudo preparar la cámara.");
-                        File imageFile = File.createTempFile("sers_reportajes_", ".jpg", directory);
-                        captureUri = FileProvider.getUriForFile(MainActivity.this,
-                            getPackageName() + ".fileprovider", imageFile);
+                        if(preparedPhotoId==null||preparedReportId==null)
+                            throw new IllegalStateException("No se ha identificado el reportaje.");
+                        captureUri=archive.startCamera(preparedReportId,preparedReportName,preparedPhotoId);
+                        if(captureUri==null)throw new IllegalStateException(archive.error());
+                        cameraInGallery=true;
                         Intent camera = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
                         camera.putExtra(MediaStore.EXTRA_OUTPUT, captureUri);
+                        camera.setClipData(ClipData.newUri(getContentResolver(),"SERS Photo",captureUri));
                         camera.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
                         startActivityForResult(camera, FILE_REQUEST);
                     } else {
-                        captureUri = null;
+                        captureUri = null;cameraInGallery=false;
                         Intent choose = new Intent(Intent.ACTION_GET_CONTENT);
                         choose.addCategory(Intent.CATEGORY_OPENABLE);
                         choose.setType(image ? "image/*" : "*/*");
@@ -159,9 +162,11 @@ public class MainActivity extends Activity implements SensorEventListener {
                     }
                     return true;
                 } catch (Exception error) {
+                    if(cameraInGallery&&captureUri!=null)archive.finishCamera(captureUri,false);
+                    cameraInGallery=false;captureUri=null;
                     fileCallback = null;
                     callback.onReceiveValue(null);
-                    toast("No se pudo abrir la cámara o la galería.");
+                    toast("No se pudo abrir la cámara: "+error.getMessage());
                     return true;
                 }
             }
@@ -190,12 +195,16 @@ public class MainActivity extends Activity implements SensorEventListener {
             fileCallback = null;
             if (callback == null) return;
             Uri result = null;
-            if (resultCode == RESULT_OK) {
+            if(cameraInGallery){
+                if(resultCode==RESULT_OK && archive.finishCamera(captureUri,true)) result=captureUri;
+                else archive.finishCamera(captureUri,false);
+            }else if (resultCode == RESULT_OK) {
                 if (data != null && data.getData() != null) result = data.getData();
                 else result = captureUri;
             }
             callback.onReceiveValue(result == null ? null : new Uri[]{result});
-            captureUri = null;
+            captureUri = null;cameraInGallery=false;
+            preparedPhotoId=null;preparedReportId=null;preparedReportName=null;
         } else if (requestCode == VOICE_REQUEST) {
             if (resultCode == RESULT_OK && data != null) {
                 ArrayList<String> words = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
@@ -267,6 +276,11 @@ public class MainActivity extends Activity implements SensorEventListener {
     }
 
     public class NativeBridge {
+        @JavascriptInterface public boolean prepareCameraArchive(String reportId,String reportName,String photoId) {
+            if(reportId==null||photoId==null||reportId.length()>150||photoId.length()>150)return false;
+            preparedReportId=reportId;preparedReportName=reportName;preparedPhotoId=photoId;
+            return true;
+        }
         // Acceso únicamente a fotos y fichas que esta APK crea en MediaStore.
         @JavascriptInterface public String archiveBegin(String reportId,String reportName,String photoId,
                                                         String extension,long bytes) {
