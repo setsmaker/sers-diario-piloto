@@ -196,8 +196,13 @@ public class MainActivity extends Activity implements SensorEventListener {
             if (callback == null) return;
             Uri result = null;
             if(cameraInGallery){
-                if(resultCode==RESULT_OK && archive.finishCamera(captureUri,true)) result=captureUri;
-                else archive.finishCamera(captureUri,false);
+                if(resultCode==RESULT_OK){
+                    boolean verified=archive.finishCamera(captureUri,true);
+                    if(!verified)toast("La foto puede haberse guardado en Galería, pero no se ha confirmado: "+
+                        archive.error());
+                    // No borrar jamás la imagen que la cámara haya escrito.
+                    result=captureUri;
+                }else archive.finishCamera(captureUri,false);
             }else if (resultCode == RESULT_OK) {
                 if (data != null && data.getData() != null) result = data.getData();
                 else result = captureUri;
