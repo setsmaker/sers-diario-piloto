@@ -20,6 +20,12 @@
 <main>
 <section id="homeView" class="view">
  <div class="home-heading"><div><span class="eyebrow">ARCHIVO FOTOGRÁFICO</span><h1>Mis reportajes</h1></div><button id="newReportToggle" class="btn primary">+ Nuevo</button></div>
+ <div id="rescuePanel" class="vault-rescue hidden">
+  <strong>Hay fotografías recuperables en el archivo del teléfono</strong>
+  <p id="rescueSummary">Comprobando las copias externas…</p>
+  <button id="rescueButton" type="button" class="btn primary full">Recuperar reportajes y fotografías</button>
+  <p id="rescueProgress" role="status" aria-live="polite"></p>
+ </div>
  <div id="recentBox" class="recent recent-compact hidden">
   <div class="recent-details"><span>ÚLTIMO REPORTAJE</span><h2 id="recentName"></h2>
    <p id="recentInfo"></p><span id="recentCount" class="recent-count"></span></div>
@@ -85,6 +91,7 @@
   <button id="captureLast" class="last-photo hidden" type="button"><img id="captureLastImg" alt="Última fotografía guardada"><span><strong id="captureLastTitle">Última fotografía</strong><small>Ver y comprobar</small></span><b>›</b></button>
  </div>
  <div id="captureFilled" class="hidden">
+  <div id="archiveStatus" class="archive-status checking" role="status" aria-live="polite">Preparando copia de seguridad…</div>
   <div class="preview-wrap"><img id="capturePreview" alt="Vista previa de la fotografía"><div id="photoLocationInfo" class="photo-overlay" aria-live="polite"></div><button id="replacePhoto" class="preview-change">↻ Repetir</button></div>
   <div class="description-panel"><div class="title-row"><h2>Descripción</h2><button id="dictate" class="mic-btn" aria-label="Dictar descripción">🎤 <span>Dictar</span></button></div>
    <textarea id="photoDescription" rows="3" placeholder="Describe la fotografía o utiliza el micrófono."></textarea>
@@ -137,6 +144,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
 <script src="../zip.js" defer></script>
 <script src="./db.js" defer></script>
+<script src="./vault.js" defer></script>
 <script src="./import.js" defer></script>
 <script src="./app.js" defer></script>
 <script src="./cloud.js" defer></script>
