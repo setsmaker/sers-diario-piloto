@@ -1,7 +1,7 @@
 'use strict';
-const CACHE='sers-photo-v6';
+const CACHE='sers-photo-v7';
 const ASSETS=['./','./index.html','./styles.css','./db.js','./app.js',
- './cloud.js','./import.js','./leaflet.css','./manifest.webmanifest','../zip.js',
+ './cloud.js','./import.js','./vault.js','./leaflet.css','./manifest.webmanifest','../zip.js',
  '../icons/icon-192.png','../icons/icon-512.png'];
 self.addEventListener('install',event=>{
  event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting()));
