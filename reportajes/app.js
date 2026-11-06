@@ -510,52 +510,110 @@
    setTimeout(resolve,1800);
   });
  }
+ async function getDraftReportOrRestore(target){
+  // El identificador del reportaje se fijó al hacer la foto. No utilizar
+  // activeId después de operaciones asíncronas, porque puede cambiar con
+  // la selección, navegación, recarga o recuperación de reportajes.
+  const id=target?.reportId;
+  if(!id||!target?.photoId)throw new Error('La fotografía no tiene un reportaje identificado.');
+  let report=await ReportDB.getReport(id);
+  if(report)return report;
+  // Si el índice interno falla pero conservamos una ficha REPORT externa
+  // con este mismo ID, restaurar únicamente el padre, sin modificar fotos.
+  if(SersVault.available()){
+   const snapshot=SersVault.index().reports.find(x=>x.id===id);
+   if(snapshot){
+    report={
+     id:snapshot.id,
+     name:snapshot.name||'Reportaje recuperado',
+     type:'reportaje',
+     createdAt:snapshot.createdAt||target.capturedAt||now(),
+     updatedAt:snapshot.updatedAt||now(),
+     closedAt:snapshot.closedAt||null,
+     photoCount:0
+    };
+    await ReportDB.saveReport(report);
+    // Actualizar lista, pero sin sustituir el objeto draft actual.
+    reports=(await ReportDB.listReports()).sort((a,b)=>
+     String(b.updatedAt).localeCompare(String(a.updatedAt)));
+    return report;
+   }
+  }
+  throw new Error('No encuentro el identificador original del reportaje ('+
+    String(id).slice(0,12)+'). La foto queda pendiente; no se borra.');
+ }
  async function savePhoto(){
-  if(!draft?.file||!active()){message('Haz una fotografía primero.');return;}
+  if(!draft?.file){message('Haz una fotografía primero.');return;}
+  if($('saveAndNext').disabled)return;
   $('saveAndNext').disabled=true;
+  const task={...draft}; // ID e imagen inmutables durante el guardado.
   try{
+   // Iniciar resolución por ID propio de la foto, no por activeId global.
+   // El reportaje puede recuperarse por su ficha externa si IndexedDB perdió
+   // únicamente el índice del reportaje.
+   const report=await getDraftReportOrRestore(task);
    await stopDictation();
-   draft.description=$('photoDescription').value;
+   task.description=$('photoDescription').value;
+   if(draft?.photoId!==task.photoId)
+    throw new Error('Ha cambiado la fotografía pendiente. No se guardará otra por error.');
+   draft.description=task.description;
    await archivePromise.catch(()=>{});
    if(SersVault.available()&&!draft.archivedName){
     archiveError=null;
-    await copyDraftToGallery(draft); // Reintentar sin descartar la foto.
+    await copyDraftToGallery(draft);
    }
    if(SersVault.available()&&!draft.archivedName)
-    throw new Error('La fotografía aún no está protegida en la galería.');
+    throw new Error('La fotografía todavía no está copiada en Galería.');
+   // Fijar versión final del borrador antes de escribir. El dictado no debe
+   // renombrar ni cambiar el reportaje asociado mientras se almacena.
+   task.archivedName=draft.archivedName;
+   task.position=draft.position;
+   task.orientation=draft.orientation;
+   task.description=$('photoDescription').value;
+   draft.description=task.description;
    await saveDraftNow();
-   await draftQueue; // Incluye el JSON externo y su confirmación.
-   const r=await ReportDB.getReport(activeId);
-   if(!r)throw new Error('El reportaje ya no existe.');
-   const sequence=draft.sequence||
-    (await ReportDB.photosByReport(activeId)).reduce((max,p)=>Math.max(max,p.sequence||0),0)+1;
-   const already=await ReportDB.getPhoto(draft.photoId);
+   await draftQueue;
+   const parent=await getDraftReportOrRestore(task);
+   const existing=await ReportDB.getPhoto(task.photoId);
+   const seq=existing?.sequence||task.sequence||
+     (await ReportDB.photosByReport(task.reportId)).reduce((n,p)=>
+       Math.max(n,p.sequence||0),0)+1;
    const item={
-    id:draft.photoId,reportId:activeId,sequence,file:draft.file,
-    originalName:draft.originalName,archivedName:draft.archivedName||null,
-    mime:draft.file.type,size:draft.file.size,source:draft.source,
-    capturedAt:draft.capturedAt,addedAt:draft.selectedAt||now(),updatedAt:now(),
-    description:draft.description||'',position:draft.position,orientation:draft.orientation
+    id:task.photoId,reportId:task.reportId,sequence:seq,
+    file:task.file,originalName:task.originalName,
+    archivedName:task.archivedName||null,mime:task.file.type,
+    size:task.file.size,source:task.source,
+    capturedAt:task.capturedAt,
+    addedAt:task.selectedAt||now(),updatedAt:now(),
+    description:task.description||'',
+    position:task.position,orientation:task.orientation
    };
-   // Primero archivar los metadatos definitivos fuera de WebView.
-   if(SersVault.available())await SersVault.writePhoto(item,r);
+   // Nunca confirmar foto por la sola existencia del JPG; también debe
+   // quedar la ficha JSON del dictado y sensores.
+   if(SersVault.available())await SersVault.writePhoto(item,parent);
    await ReportDB.savePhoto(item);
-   r.photoCount=(await ReportDB.photosByReport(activeId)).length;
-   r.closedAt=null;r.updatedAt=now();
-   if(SersVault.available())await SersVault.writeReport(r);
-   await ReportDB.saveReport(r);
+   parent.photoCount=(await ReportDB.photosByReport(task.reportId)).length;
+   parent.closedAt=null;parent.updatedAt=now();
+   if(SersVault.available())await SersVault.writeReport(parent);
+   await ReportDB.saveReport(parent);
+   // Solo descartar el borrador cuando foto, JSON y reportaje estén escritos.
    await ReportDB.clearDraft();
-   draft=null;photos=await ReportDB.photosByReport(activeId);
+   if(draft?.photoId===task.photoId)draft=null;
+   if(activeId!==task.reportId){
+    activeId=task.reportId;selectedReportId=task.reportId;
+    localStorage.setItem(KEY,task.reportId);
+   }
    await reload();
-   $('capCounter').textContent='Fotografía '+labelNum((r.photoCount||0)+1);
+   $('capCounter').textContent='Fotografía '+labelNum(parent.photoCount+1);
    renderDraft();
    window.dispatchEvent(new CustomEvent('sers-reportajes:saved',{
-    detail:{id:item.id,reportId:activeId}}));
-   message('✓ Foto '+labelNum(sequence)+' guardada en Galería y ficha de datos.');
+    detail:{id:item.id,reportId:task.reportId}}));
+   message('✓ Foto '+labelNum(seq)+' guardada con descripción, GPS y orientación.');
   }catch(e){
-   console.error('Error protegiendo la foto',e);
+   console.error('Error guardando foto ID',task.photoId,
+    'reportaje de la foto',task.reportId,'reportaje activo',activeId,e);
    archiveStatus('⚠ NO GUARDADA COMPLETAMENTE: '+String(e.message||e),'error');
-   message('No se ha completado el guardado. La foto pendiente sigue disponible.');
+   message('El guardado no ha terminado. La fotografía pendiente sigue disponible.');
   }finally{$('saveAndNext').disabled=false;}
  }
  function clearCardUrls(){
