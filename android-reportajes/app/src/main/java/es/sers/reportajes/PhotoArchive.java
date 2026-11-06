@@ -139,6 +139,7 @@ public final class PhotoArchive {
             return "ERROR:La cámara no ha escrito una fotografía válida.";
         String name=pictureName(photoId,"jpg");
         Uri entry=null;
+        boolean published=false;
         try{
             // No borrar ni sobrescribir fotos públicas ya guardadas.
             Uri existing=search(images,name,Environment.DIRECTORY_PICTURES+"/SERS Photo/");
@@ -167,13 +168,17 @@ public final class PhotoArchive {
             done.put(MediaStore.MediaColumns.IS_PENDING,0);
             if(resolver.update(entry,done,null,null)<1)
                 throw new IOException("No se confirmó la fotografía en Galería.");
+            published=true;
             if(actualSize(entry)!=source.length())
                 throw new IOException("La copia de Galería no tiene el tamaño correcto.");
             return name;
         }catch(Exception error){
             lastError=error.toString();
-            // Nunca borrar la captura original. Si la copia pública es
-            // incompleta dejamos que Android la trate como pendiente.
+            // Borrar solamente una copia incompleta propia de MediaStore
+            // para permitir reintentar; nunca borrar el JPG capturado.
+            // Si la copia ya es pública, conservarla para rescate.
+            if(entry!=null&&!published)
+                try{resolver.delete(entry,null,null);}catch(Exception ignored){}
             return "ERROR:"+lastError;
         }
     }
