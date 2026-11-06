@@ -61,9 +61,11 @@ public class MainActivity extends Activity implements SensorEventListener {
     private OutputStream exportStream;
     private String exportName;
     private boolean exportIsShare = false;
+    private PhotoArchive archive;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        archive = new PhotoArchive(this);
         getWindow().setStatusBarColor(0xff24523c);
         getWindow().setNavigationBarColor(0xffffffff);
         sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
@@ -265,6 +267,35 @@ public class MainActivity extends Activity implements SensorEventListener {
     }
 
     public class NativeBridge {
+        // Acceso únicamente a fotos y fichas que esta APK crea en MediaStore.
+        @JavascriptInterface public String archiveBegin(String reportId,String reportName,String photoId,
+                                                        String extension,long bytes) {
+            return archive.beginImage(reportId,reportName,photoId,extension,bytes);
+        }
+        @JavascriptInterface public boolean archiveChunk(String data) {
+            return archive.appendImage(data);
+        }
+        @JavascriptInterface public String archiveFinish() {
+            return archive.endImage();
+        }
+        @JavascriptInterface public String archiveSaveReport(String json) {
+            return archive.saveReport(json);
+        }
+        @JavascriptInterface public String archiveSavePhoto(String json) {
+            return archive.savePhotoMeta(json);
+        }
+        @JavascriptInterface public String archiveReadIndex() {
+            return archive.readIndex();
+        }
+        @JavascriptInterface public long archiveImageSize(String name) {
+            return archive.imageSize(name);
+        }
+        @JavascriptInterface public String archiveReadImage(String name,long start,int size) {
+            return archive.readImageChunk(name,start,size);
+        }
+        @JavascriptInterface public String archiveError() {
+            return archive.error();
+        }
         @JavascriptInterface public void startVoiceInput() {
             ui.post(() -> {
                 try {
