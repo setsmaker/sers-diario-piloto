@@ -89,6 +89,28 @@ const SersVault=(()=>{
   if(file.size!==size)throw new Error('La foto recuperada tiene un tamaño distinto.');
   return file;
  }
+ async function readCapturedPhoto(meta) {
+  const b=bridge(),id=meta?.photoId;
+  if(!b?.nativeCaptureSize||!b?.nativeCaptureChunk)throw new Error('No hay lector de fotos de cámara.');
+  if(!/^[A-Za-z0-9_-]{1,150}$/.test(id||''))
+   throw new Error('Identificador de cámara incorrecto.');
+  const size=b.nativeCaptureSize(id);
+  if(size<1024)throw new Error('La fotografía no se guardó o está incompleta.');
+  const chunks=[],partSize=96*1024;
+  for(let offset=0;offset<size;offset+=partSize){
+   const encoded=check(b.nativeCaptureChunk(id,offset,Math.min(partSize,size-offset)));
+   if(!encoded)throw new Error('El archivo de cámara no se ha leído por completo.');
+   const raw=atob(encoded),bytes=new Uint8Array(raw.length);
+   for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);
+   chunks.push(bytes);
+   if(offset%(partSize*8)===0)await new Promise(resolve=>setTimeout(resolve,0));
+  }
+  const file=new File(chunks,meta.originalName||('SERS_'+id+'.jpg'),{
+   type:'image/jpeg',lastModified:Date.parse(meta.capturedAt)||Date.now()
+  });
+  if(file.size!==size)throw new Error('La fotografía de cámara está incompleta.');
+  return file;
+ }
  const plainPhoto=m=>({
   id:m.id,reportId:m.reportId,sequence:m.sequence,originalName:m.originalName,
   mime:m.mime,size:m.size,source:m.source,
@@ -142,5 +164,5 @@ const SersVault=(()=>{
   }
   return {recoveredReports,recoveredPhotos,errors,totalArchivePhotos:archive.photos.length};
  }
- return {available,writeReport,writePhoto,archiveFile,index,restore};
+ return {available,writeReport,writePhoto,archiveFile,readPhoto,readCapturedPhoto,index,restore};
 })();
