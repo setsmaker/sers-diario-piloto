@@ -3,4 +3,5 @@
     <cache-path name="camera" path="camera/" />
     <cache-path name="share" path="share/" />
     <external-files-path name="exports" path="." />
+    <external-files-path name="camera_originals" path="Pictures/SersCapture/" />
 </paths>
