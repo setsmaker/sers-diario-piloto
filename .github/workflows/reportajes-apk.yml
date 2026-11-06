@@ -66,6 +66,15 @@ jobs:
           cp zip.js "$ASSETS/zip.js"
           cp icons/icon-192.png icons/icon-512.png "$ASSETS/icons/"
           cp icons/icon-192.png android-reportajes/app/src/main/res/drawable-nodpi/ic_launcher.png
+      - name: Comprobar scripts y restauración de copias externas
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check reportajes/app.js
+          node --check reportajes/db.js
+          node --check reportajes/vault.js
+          node --check reportajes/import.js
+          node reportajes/test-vault.cjs
       - name: Compilar APK
         run: gradle -p android-reportajes --no-daemon assembleDebug
       - name: Preparar APK con nombre de instalación
