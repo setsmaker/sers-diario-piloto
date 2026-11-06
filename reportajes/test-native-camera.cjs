@@ -42,7 +42,7 @@ const vault={
  available:()=>true,
  writeReport:async()=> 'REPORT.json',
  writePhoto:async()=>{seen.writePhoto++;return 'PHOTO.json';},
- archiveFile:async()=>{seen.archiveFile++;return 'WRONG-DUPLICATE.jpg';},
+ archiveFile:async(_file,_report,id)=>{seen.archiveFile++;return 'SERS_'+id+'.jpg';},
  readPhoto:async meta=>{
    seen.readPhoto++;
    assert.equal(meta.archivedName,'SERS_'+nativeStarts.at(-1).photoId+'.jpg');
@@ -121,5 +121,17 @@ const ctx={
  assert.equal(photos[0].description,'Descripción dictada de ejemplo');
  assert.equal(photos[0].archivedName,'SERS_'+id+'.jpg');
  assert.ok(seen.writePhoto>=2,'los datos deben archivarse al capturar y guardar');
- console.log('OK: foto nativa visible, descripción guardada y sin JPG duplicado');
+ // Simular que el original existe pero Android rechaza la copia en Galería.
+ await els.cameraButton.click();
+ assert.equal(nativeStarts.length,2);
+ const fallbackId=nativeStarts.at(-1).photoId;
+ await listeners['sers-native-photo']({detail:{
+  photoId:fallbackId,archivedName:null,galleryError:'MediaStore no disponible'
+ }});
+ assert.equal(seen.readPhoto,2,'debe leer el original aunque Galería falle');
+ assert.ok(draft?.file,'debe mostrar la captura para poder describirla');
+ assert.ok(!els.captureFilled.classList.contains('hidden'),'vista previa tras fallo de Galería');
+ assert.equal(seen.archiveFile,1,'debe reintentar salvar en Galería');
+ assert.equal(draft.archivedName,'SERS_'+fallbackId+'.jpg');
+ console.log('OK: foto nativa visible, descripción guardada, sin duplicados y recuperación tras fallo de Galería');
 })().catch(error=>{console.error(error);process.exitCode=1;});
