@@ -240,11 +240,7 @@ public final class PhotoArchive {
         }catch(Exception e){return null;}
     }
     public synchronized long imageSize(String filename){
-        Uri u=search(images,clean(filename.replace(".","_").replace("_jpg",".jpg")),
-            Environment.DIRECTORY_PICTURES+"/SERS Photo/");
-        // La limpieza anterior no es apta para nombres completos; utilizar
-        // consulta exacta en su lugar.
-        u=search(images,filename,Environment.DIRECTORY_PICTURES+"/SERS Photo/");
+        Uri u=search(images,filename,Environment.DIRECTORY_PICTURES+"/SERS Photo/");
         if(u==null)return -1;
         try(Cursor c=resolver.query(u,new String[]{MediaStore.MediaColumns.SIZE},null,null,null)){
             return c!=null&&c.moveToFirst()?c.getLong(0):-1;
