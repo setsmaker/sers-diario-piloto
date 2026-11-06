@@ -8,7 +8,7 @@
         <intent><action android:name="android.media.action.IMAGE_CAPTURE" /></intent>
     </queries>
     <application
-        android:label="SERS Photo Seguro 9"
+        android:label="SERS Photo Seguro 10"
         android:icon="@drawable/ic_launcher"
         android:roundIcon="@drawable/ic_launcher"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
