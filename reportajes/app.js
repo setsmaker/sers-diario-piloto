@@ -350,26 +350,63 @@
   updatePhotoLocationInfo();
   $('photoDescription').value=draft?.description||'';
   $('dictateStatus').textContent='';
+  if(hasFile){
+   archiveStatus(draft.archivedName?'✓ Fotografía copiada a la galería':
+    'Preparando copia de seguridad…',draft.archivedName?'success':'checking');
+  }
+ }
+ function archiveStatus(text,level='checking'){
+  const el=$('archiveStatus');if(!el)return;
+  el.textContent=text;el.className='archive-status '+level;
  }
  function scheduleDraft(){
   if(!draft?.file)return;
   clearTimeout(draftTimer);
-  draftTimer=setTimeout(()=>saveDraftNow(),450);
+  draftTimer=setTimeout(()=>saveDraftNow(),550);
  }
  function saveDraftNow(){
   clearTimeout(draftTimer);
   if(!draft?.file)return draftQueue;
   const copy={...draft};
-  draftQueue=draftQueue.catch(()=>{}).then(()=>ReportDB.saveDraft(copy));
-  draftQueue.catch(e=>{console.error(e);message('No se pudo guardar el borrador. Revisa el espacio libre.');});
+  draftQueue=draftQueue.catch(()=>{}).then(async()=>{
+   await ReportDB.saveDraft(copy);
+   if(SersVault.available()&&copy.archivedName){
+    const parent=await ReportDB.getReport(copy.reportId);
+    if(parent)await SersVault.writePhoto({
+     id:copy.photoId,reportId:copy.reportId,sequence:copy.sequence,
+     archivedName:copy.archivedName,originalName:copy.originalName,
+     mime:copy.file.type,size:copy.file.size,source:copy.source,
+     capturedAt:copy.capturedAt,addedAt:copy.selectedAt,updatedAt:now(),
+     description:copy.description,position:copy.position,
+     orientation:copy.orientation,recordState:'draft'
+    },parent);
+   }
+  });
+  draftQueue.catch(e=>{
+   console.error('Error guardando borrador o ficha',e);
+   archiveStatus('⚠ No se ha confirmado la ficha externa. Conserva la foto y reintenta.', 'error');
+  });
   return draftQueue;
+ }
+ async function copyDraftToGallery(target=draft){
+  if(!SersVault.available()||!target?.file)return;
+  const parent=await ReportDB.getReport(target.reportId);
+  if(!parent)throw new Error('No existe el reportaje para archivar la foto.');
+  archiveStatus('Guardando fotografía original en la galería…','checking');
+  const name=await SersVault.archiveFile(target.file,parent,target.photoId);
+  // No sustituir el borrador de otra fotografía.
+  if(!draft||draft.photoId!==target.photoId)return;
+  draft.archivedName=name;
+  archiveStatus('Guardando descripción, GPS y orientación en Descargas…','checking');
+  await saveDraftNow();
+  archiveStatus('✓ Copia guardada en Galería y ficha JSON en Descargas','success');
  }
  async function photoSelected(event,source){
   const file=event.target.files?.[0];event.target.value='';
   if(!file)return;
   if(!file.type.startsWith('image/')){message('Selecciona un archivo de imagen.');return;}
   stopDictation();
-  if(draft?.file&&!confirm('Sustituir la fotografía actual? Se perderá la imagen del borrador.'))return;
+  if(draft?.file&&!confirm('¿Sustituir la foto pendiente? La fotografía anterior se conserva si ya está en la galería.'))return;
   const captureTime=source==='camera'?now():new Date(file.lastModified||Date.now()).toISOString();
   let position=source==='camera'?gpsSnapshot():null;
   let orientationValue=source==='camera'?headingSnapshot():null;
@@ -379,11 +416,23 @@
      method:cameraStart.orientation.method+'-antes-de-camara'};
   }
   cameraStart=null;
-  draft={id:'capture',reportId:activeId,file,originalName:file.name,
-   description:'',source,capturedAt:captureTime,selectedAt:now(),
-   position,orientation:orientationValue};
+  const seq=(await ReportDB.photosByReport(activeId)).reduce((m,p)=>Math.max(m,p.sequence||0),0)+1;
+  draft={id:'capture',reportId:activeId,photoId:uid(),sequence:seq,
+   file,originalName:file.name,description:'',source,
+   capturedAt:captureTime,selectedAt:now(),position,orientation:orientationValue};
   renderDraft();
-  try{await saveDraftNow();}catch{}
+  archiveStatus('Preparando copias de seguridad…','checking');
+  try{
+   await saveDraftNow();
+   archiveError=null;
+   archivePromise=copyDraftToGallery(draft);
+   await archivePromise;
+  }catch(e){
+   archiveError=e;
+   console.error('No se pudo proteger fotografía',e);
+   archiveStatus('⚠ ERROR AL GUARDAR COPIA: '+e.message,'error');
+   message('La imagen sigue pendiente. No continúes hasta resolver el error.');
+  }
  }
  function startDictation(){
   if(!draft?.file){message('Haz primero una fotografía.');return;}
