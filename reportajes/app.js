@@ -1056,6 +1056,46 @@
    mapStatus('Coordenadas disponibles: '+mapLocated.length+' de '+photos.length+'.');
   }
  }
+ async function checkRecoverable(){
+  if(!SersVault.available())return;
+  try{
+   const external=SersVault.index();
+   const inDb=new Set((await ReportDB.allPhotos()).map(p=>p.id));
+   const existingReports=new Set((await ReportDB.listReports()).map(r=>r.id));
+   const missing=external.photos.filter(p=>!inDb.has(p.id));
+   const missingReports=external.reports.filter(r=>!existingReports.has(r.id));
+   const panel=$('rescuePanel');
+   panel.classList.toggle('hidden',missing.length===0&&missingReports.length===0);
+   $('rescueSummary').textContent=missing.length+' fotografías y '+missingReports.length+
+    ' reportajes con copia en la galería o Descargas que no aparecen aquí.';
+  }catch(e){
+   console.error('Error consultando el archivo de recuperación',e);
+   const panel=$('rescuePanel');panel.classList.remove('hidden');
+   $('rescueSummary').textContent='No se ha podido comprobar el archivo externo: '+e.message;
+   $('rescueButton').disabled=true;
+  }
+ }
+ async function recoverFromGallery(){
+  const button=$('rescueButton');
+  button.disabled=true;
+  button.textContent='Recuperando…';
+  const status=$('rescueProgress');
+  status.textContent='Leyendo archivos de respaldo…';
+  try{
+   const result=await SersVault.restore(text=>status.textContent=text);
+   await reload();renderHome();
+   status.textContent=result.recoveredPhotos+' fotos recuperadas, '+result.recoveredReports+
+    ' reportajes reconstruidos'+(result.errors.length?' · '+result.errors.length+' errores':'')+'.';
+   if(result.errors.length)message('Algunas fotos no se recuperaron. Comprueba el archivo en Galería.');
+   await checkRecoverable();
+  }catch(e){
+   console.error('Error recuperando archivo',e);
+   status.textContent='Error: '+e.message;
+  }finally{
+   button.disabled=false;
+   button.textContent='Recuperar reportajes y fotografías';
+  }
+ }
  async function boot(){
   network();
   disableNativeServiceWorker();
@@ -1072,9 +1112,24 @@
     if(report){activeId=report.id;selectedReportId=report.id;localStorage.setItem(KEY,activeId);photos=await ReportDB.photosByReport(activeId);}
    }
    renderHome();
-  }catch(e){console.error(e);message('No se pudo abrir el almacenamiento del móvil.');}
+   await checkRecoverable();
+   if(saved?.file&&SersVault.available()){
+    const parent=await ReportDB.getReport(saved.reportId);
+    if(parent&&!saved.archivedName){
+     archivePromise=copyDraftToGallery(saved).catch(e=>{
+      archiveStatus('⚠ Foto pendiente de copiar: '+e.message,'error');
+     });
+    }
+   }
+  }catch(e){
+   console.error('Error abriendo base de datos del móvil',e);
+   $('rescuePanel').classList.remove('hidden');
+   $('rescueSummary').textContent='No se puede abrir la base de datos. Las copias de Galería y Descargas podrían seguir disponibles.';
+   message('Error al abrir el almacenamiento. No crees reportajes hasta recuperar las copias.');
+  }
  }
  $('createReport').addEventListener('click',createReport);
+ $('rescueButton').addEventListener('click',recoverFromGallery);
  $('importReportBtn').addEventListener('click',()=>$('importZipInput').click());
  $('importZipInput').addEventListener('change',importReport);
  $('newReportToggle').addEventListener('click',()=>{
