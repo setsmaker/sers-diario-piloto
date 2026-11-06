@@ -83,9 +83,9 @@ jobs:
               font=ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',int(h*.115))
           except OSError:
               font=ImageFont.load_default()
-          bbox=draw.textbbox((0,0),'v9',font=font,stroke_width=0)
+          bbox=draw.textbbox((0,0),'v10',font=font,stroke_width=0)
           tw,th=bbox[2]-bbox[0],bbox[3]-bbox[1]
-          draw.text(((left+right-tw)/2-bbox[0],(top+bottom-th)/2-bbox[1]),'v9',
+          draw.text(((left+right-tw)/2-bbox[0],(top+bottom-th)/2-bbox[1]),'v10',
                     font=font,fill='#173D2D')
           output=Path('android-reportajes/app/src/main/res/drawable-nodpi/ic_launcher.png')
           source.save(output)
@@ -106,24 +106,24 @@ jobs:
       - name: Preparar APK con nombre de instalación
         run: |
           mkdir -p dist
-          cp android-reportajes/app/build/outputs/apk/debug/app-debug.apk dist/SERS_Photo_Seguro_v9.apk
-          test -s dist/SERS_Photo_Seguro_v9.apk
+          cp android-reportajes/app/build/outputs/apk/debug/app-debug.apk dist/SERS_Photo_Seguro_v10.apk
+          test -s dist/SERS_Photo_Seguro_v10.apk
       - name: Adjuntar APK a GitHub Actions
         uses: actions/upload-artifact@v4
         with:
           name: SERS-Reportajes-APK
-          path: dist/SERS_Photo_Seguro_v9.apk
+          path: dist/SERS_Photo_Seguro_v10.apk
       - name: Publicar APK de prueba en GitHub Releases
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          TAG="sers-photo-seguro-v9"
+          TAG="sers-photo-seguro-v10"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/SERS_Photo_Seguro_v9.apk --clobber
+            gh release upload "$TAG" dist/SERS_Photo_Seguro_v10.apk --clobber
           else
-            gh release create "$TAG" dist/SERS_Photo_Seguro_v9.apk \
-              --title "SERS Photo Seguro · APK de prueba v9" \
-              --notes "SERS Photo Seguro v9: copia nativa de fotografías originales en Galería e historiales JSON externos en Descargas, recuperación de reportajes a partir de backups, GPS, brújula y dictado. Cámara Xiaomi con FileProvider y doble guardado en Galería, descripción, GPS, brújula, dictado y ZIP. APK de prueba; se recomienda no usar con información confidencial hasta validar seguridad y sincronización."
+            gh release create "$TAG" dist/SERS_Photo_Seguro_v10.apk \
+              --title "SERS Photo Seguro · APK de prueba v10" \
+              --notes "SERS Photo Seguro v10: copia nativa de fotografías originales en Galería e historiales JSON externos en Descargas, recuperación de reportajes a partir de backups, GPS, brújula y dictado. Cámara Xiaomi con FileProvider y doble guardado en Galería, descripción, GPS, brújula, dictado y ZIP. APK de prueba; se recomienda no usar con información confidencial hasta validar seguridad y sincronización."
           fi
