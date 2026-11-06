@@ -311,6 +311,11 @@
    const saved=await ReportDB.getDraft();
    draft=saved?.file&&saved.reportId===r.id?saved:null;
    renderDraft();
+   if(draft?.file&&SersVault.available()&&!draft.archivedName){
+    archivePromise=copyDraftToGallery(draft).catch(e=>{
+     archiveStatus('⚠ No se pudo recuperar la copia: '+e.message,'error');
+    });
+   }
    if(saved?.file&&saved.reportId!==r.id)message('Hay una fotografía pendiente en otro reportaje.');
   }catch(e){console.error(e);draft=null;renderDraft();}
  }
@@ -1117,14 +1122,6 @@
    }
    renderHome();
    await checkRecoverable();
-   if(saved?.file&&SersVault.available()){
-    const parent=await ReportDB.getReport(saved.reportId);
-    if(parent&&!saved.archivedName){
-     archivePromise=copyDraftToGallery(saved).catch(e=>{
-      archiveStatus('⚠ Foto pendiente de copiar: '+e.message,'error');
-     });
-    }
-   }
   }catch(e){
    console.error('Error abriendo base de datos del móvil',e);
    $('rescuePanel').classList.remove('hidden');
