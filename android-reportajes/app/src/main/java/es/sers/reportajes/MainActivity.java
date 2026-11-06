@@ -47,6 +47,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     private static final int FILE_REQUEST = 601;
     private static final int VOICE_REQUEST = 602;
     private static final int LOCATION_REQUEST = 603;
+    private static final int NATIVE_PHOTO_REQUEST = 604;
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private WebView web;
@@ -64,6 +65,11 @@ public class MainActivity extends Activity implements SensorEventListener {
     private PhotoArchive archive;
     private String preparedReportId,preparedReportName,preparedPhotoId;
     private boolean cameraInGallery=false;
+    // La cámara principal de SERS Photo usa un flujo nativo, independiente
+    // del selector <input type=file> de Android WebView.
+    private Uri nativePhotoUri;
+    private String nativePhotoId;
+    private boolean nativePhotoPending=false;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -188,8 +194,37 @@ public class MainActivity extends Activity implements SensorEventListener {
         web.loadUrl(URL);
     }
 
+    private void emitCameraResult(String event, String photoId, String error) {
+        if(web == null)return;
+        String payload="{photoId:"+org.json.JSONObject.quote(photoId==null?"":photoId);
+        if(error==null){
+            String name="SERS_"+photoId+".jpg";
+            payload+=",archivedName:"+org.json.JSONObject.quote(name);
+        }else{
+            payload+=",error:"+org.json.JSONObject.quote(error);
+        }
+        payload+="}";
+        web.evaluateJavascript(
+          "window.dispatchEvent(new CustomEvent("+org.json.JSONObject.quote(event)+",{detail:"+payload+"}));",
+          null);
+    }
+
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == NATIVE_PHOTO_REQUEST) {
+            // Algunas cámaras Xiaomi devuelven RESULT_CANCELED aunque
+            // la foto ya esté correctamente escrita: comprobar archivo real.
+            String id=nativePhotoId;
+            Uri uri=nativePhotoUri;
+            nativePhotoPending=false;nativePhotoId=null;nativePhotoUri=null;
+            if(uri!=null && archive.finishCamera(uri,true)){
+                emitCameraResult("sers-native-photo",id,null);
+            }else{
+                emitCameraResult("sers-native-photo-error",id,
+                    "La cámara no ha entregado una imagen válida. "+archive.error());
+            }
+            return;
+        }
         if (requestCode == FILE_REQUEST) {
             ValueCallback<Uri[]> callback = fileCallback;
             fileCallback = null;
@@ -281,6 +316,40 @@ public class MainActivity extends Activity implements SensorEventListener {
     }
 
     public class NativeBridge {
+        /**
+         * Abre la cámara y guarda la toma en MediaStore. El resultado
+         * se comunica con un evento JS, no mediante el selector de WebView.
+         */
+        @JavascriptInterface public boolean startPhotoCamera(String reportId,String reportName,String photoId) {
+            if(reportId==null||reportName==null||photoId==null||
+               !reportId.matches("[A-Za-z0-9_-]{1,150}")||
+               !photoId.matches("[A-Za-z0-9_-]{1,150}"))return false;
+            ui.post(()->{
+                if(nativePhotoPending){
+                    emitCameraResult("sers-native-photo-error",photoId,
+                        "La cámara ya está abierta.");
+                    return;
+                }
+                try{
+                    Uri output=archive.startCamera(reportId,reportName,photoId);
+                    if(output==null)throw new IllegalStateException(archive.error());
+                    nativePhotoUri=output;nativePhotoId=photoId;nativePhotoPending=true;
+                    Intent intent=new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                    intent.putExtra(MediaStore.EXTRA_OUTPUT,output);
+                    intent.setClipData(ClipData.newUri(getContentResolver(),"SERS Photo",output));
+                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|
+                                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                    startActivityForResult(intent,NATIVE_PHOTO_REQUEST);
+                }catch(Exception error){
+                    Uri incomplete=nativePhotoUri;
+                    nativePhotoUri=null;nativePhotoId=null;nativePhotoPending=false;
+                    if(incomplete!=null)archive.finishCamera(incomplete,false);
+                    emitCameraResult("sers-native-photo-error",photoId,
+                        "No se pudo abrir la cámara: "+error.getMessage());
+                }
+            });
+            return true;
+        }
         @JavascriptInterface public boolean prepareCameraArchive(String reportId,String reportName,String photoId) {
             if(reportId==null||photoId==null||reportId.length()>150||photoId.length()>150)return false;
             preparedReportId=reportId;preparedReportName=reportName;preparedPhotoId=photoId;
