@@ -80,6 +80,46 @@ public final class PhotoArchive {
         }catch(Exception ignored){}
         return null;
     }
+    /** Cámara nativa: fotografía original directamente en Galería, no en caché. */
+    public synchronized Uri startCamera(String reportId,String reportName,String photoId){
+        lastError="";
+        try{
+            ContentValues cv=new ContentValues();
+            cv.put(MediaStore.MediaColumns.DISPLAY_NAME,pictureName(photoId,"jpg"));
+            cv.put(MediaStore.MediaColumns.MIME_TYPE,"image/jpeg");
+            cv.put(MediaStore.MediaColumns.RELATIVE_PATH,photoDir(reportId,reportName));
+            cv.put(MediaStore.MediaColumns.IS_PENDING,1);
+            Uri result=resolver.insert(images,cv);
+            if(result==null)throw new Exception("No se pudo crear la imagen de cámara.");
+            return result;
+        }catch(Exception e){lastError=e.toString();return null;}
+    }
+    public synchronized boolean finishCamera(Uri uri,boolean success){
+        if(uri==null)return false;
+        try{
+            if(success){
+                ContentValues done=new ContentValues();
+                done.put(MediaStore.MediaColumns.IS_PENDING,0);
+                if(resolver.update(uri,done,null,null)<1)
+                    throw new Exception("La cámara no confirmó la foto.");
+                try(Cursor c=resolver.query(uri,new String[]{MediaStore.MediaColumns.SIZE},null,null,null)){
+                    if(c==null||!c.moveToFirst()||c.getLong(0)<1)
+                        throw new Exception("La cámara devolvió un archivo vacío.");
+                }
+                return true;
+            }
+            resolver.delete(uri,null,null);
+            return false;
+        }catch(Exception e){
+            lastError=e.toString();
+            // Si hubo foto escrita, intentar dejarla visible para rescate.
+            try{ContentValues done=new ContentValues();
+                done.put(MediaStore.MediaColumns.IS_PENDING,0);
+                resolver.update(uri,done,null,null);
+            }catch(Exception ignored){}
+            return false;
+        }
+    }
     public synchronized String beginImage(String reportId,String reportName,String photoId,
                                           String extension,long size) {
         lastError="";
@@ -264,8 +304,14 @@ public final class PhotoArchive {
                 remaining-=skipped;
             }
             byte[] buf=new byte[maxBytes];
-            int count=in.read(buf,0,buf.length);
-            if(count<0)return "";
+            int count=0;
+            while(count<buf.length){
+                int n=in.read(buf,count,buf.length-count);
+                if(n<0)break;
+                if(n==0)break;
+                count+=n;
+            }
+            if(count<1)return "";
             return Base64.encodeToString(buf,0,count,Base64.NO_WRAP);
         }catch(Exception e){lastError=e.toString();return "ERROR:"+lastError;}
     }
