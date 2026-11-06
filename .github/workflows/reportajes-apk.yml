@@ -65,7 +65,32 @@ jobs:
           PY
           cp zip.js "$ASSETS/zip.js"
           cp icons/icon-192.png icons/icon-512.png "$ASSETS/icons/"
-          cp icons/icon-192.png android-reportajes/app/src/main/res/drawable-nodpi/ic_launcher.png
+          # Distintivo de versión solamente en el icono del lanzador Android.
+          # El logotipo del encabezado sigue intacto.
+          python3 -m pip install --quiet --user Pillow
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image, ImageDraw, ImageFont
+          source=Image.open('icons/icon-512.png').convert('RGBA')
+          w,h=source.size
+          draw=ImageDraw.Draw(source)
+          badge_w,badge_h=int(w*.35),int(h*.19)
+          right,bottom=int(w*.93),int(h*.90)
+          left,top=right-badge_w,bottom-badge_h
+          draw.rounded_rectangle((left,top,right,bottom),radius=int(badge_h*.36),
+                                 fill='#EFBA4D',outline='#FFFFFF',width=max(3,w//85))
+          try:
+              font=ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',int(h*.115))
+          except OSError:
+              font=ImageFont.load_default()
+          bbox=draw.textbbox((0,0),'v9',font=font,stroke_width=0)
+          tw,th=bbox[2]-bbox[0],bbox[3]-bbox[1]
+          draw.text(((left+right-tw)/2-bbox[0],(top+bottom-th)/2-bbox[1]),'v9',
+                    font=font,fill='#173D2D')
+          output=Path('android-reportajes/app/src/main/res/drawable-nodpi/ic_launcher.png')
+          source.save(output)
+          assert output.exists() and output.stat().st_size>0
+          PY
       - name: Comprobar scripts y restauración de copias externas
         shell: bash
         run: |
