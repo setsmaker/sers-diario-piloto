@@ -431,6 +431,12 @@ public class MainActivity extends Activity implements SensorEventListener {
         @JavascriptInterface public String archiveReadIndex() {
             return archive.readIndex();
         }
+        @JavascriptInterface public long nativeCaptureSize(String photoId) {
+            return archive.nativeCaptureSize(photoId);
+        }
+        @JavascriptInterface public String nativeCaptureChunk(String photoId,long offset,int size) {
+            return archive.readCaptureChunk(photoId,offset,size);
+        }
         @JavascriptInterface public long archiveImageSize(String name) {
             return archive.imageSize(name);
         }
