@@ -48,6 +48,11 @@ const vault={
    assert.equal(meta.archivedName,'SERS_'+nativeStarts.at(-1).photoId+'.jpg');
    return new File([jpeg],meta.archivedName,{type:'image/jpeg'});
  },
+ readCapturedPhoto:async meta=>{
+   seen.readPhoto++;
+   assert.equal(meta.photoId,nativeStarts.at(-1).photoId);
+   return new File([jpeg],'SERS_'+meta.photoId+'.jpg',{type:'image/jpeg'});
+ },
  index:()=>({reports:[],photos:[]}),
  restore:async()=>({recoveredReports:0,recoveredPhotos:0,errors:[]})
 };
