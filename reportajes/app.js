@@ -415,11 +415,12 @@
    if(!orientationValue&&cameraStart.orientation)orientationValue={...cameraStart.orientation,
      method:cameraStart.orientation.method+'-antes-de-camara'};
   }
-  cameraStart=null;
   const seq=(await ReportDB.photosByReport(activeId)).reduce((m,p)=>Math.max(m,p.sequence||0),0)+1;
-  draft={id:'capture',reportId:activeId,photoId:uid(),sequence:seq,
+  const photoId=source==='camera'&&cameraStart?.photoId?cameraStart.photoId:uid();
+  draft={id:'capture',reportId:activeId,photoId,sequence:seq,
    file,originalName:file.name,description:'',source,
    capturedAt:captureTime,selectedAt:now(),position,orientation:orientationValue};
+  cameraStart=null;
   renderDraft();
   archiveStatus('Preparando copias de seguridad…','checking');
   try{
@@ -1169,7 +1170,16 @@
  $('gpsRefresh').addEventListener('click',refreshGPS);
  $('compassEnable').addEventListener('click',requestCompass);
  function launchCamera(){
-  cameraStart={position:gpsSnapshot(),orientation:headingSnapshot(),at:now()};
+  const r=active();
+  if(!r){message('Selecciona primero un reportaje.');return;}
+  if(draft?.file&&!confirm('¿Repetir foto? La toma anterior seguirá en Galería si ya se ha guardado.'))return;
+  cameraStart={position:gpsSnapshot(),orientation:headingSnapshot(),at:now(),
+   photoId:uid()};
+  if(window.SersAndroid?.prepareCameraArchive){
+   if(!window.SersAndroid.prepareCameraArchive(r.id,r.name,cameraStart.photoId)){
+    message('No se puede preparar la fotografía en la galería.');return;
+   }
+  }
   $('cameraInput').click();
  }
  $('cameraButton').addEventListener('click',launchCamera);
