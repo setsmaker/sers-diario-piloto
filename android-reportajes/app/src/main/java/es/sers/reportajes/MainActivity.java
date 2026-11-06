@@ -217,12 +217,15 @@ public class MainActivity extends Activity implements SensorEventListener {
             String id=nativePhotoId;
             Uri uri=nativePhotoUri;
             nativePhotoPending=false;nativePhotoId=null;nativePhotoUri=null;
-            if(uri!=null && archive.finishCamera(uri,true)){
-                emitCameraResult("sers-native-photo",id,null);
-            }else{
-                emitCameraResult("sers-native-photo-error",id,
+            boolean valid=uri!=null && archive.finishCamera(uri,true);
+            // La actividad WebView puede estar reanudándose después
+            // de que Android cierre la cámara. Enviar el evento cuando
+            // haya terminado de volver al primer plano.
+            ui.postDelayed(()->{
+                if(valid)emitCameraResult("sers-native-photo",id,null);
+                else emitCameraResult("sers-native-photo-error",id,
                     "La cámara no ha entregado una imagen válida. "+archive.error());
-            }
+            },180);
             return;
         }
         if (requestCode == FILE_REQUEST) {
