@@ -128,6 +128,15 @@ public final class PhotoArchive {
             return false;
         }
     }
+    private long actualSize(Uri uri){
+        try(android.os.ParcelFileDescriptor fd=resolver.openFileDescriptor(uri,"r")){
+            if(fd!=null&&fd.getStatSize()>0)return fd.getStatSize();
+        }catch(Exception ignored){}
+        try(Cursor c=resolver.query(uri,new String[]{MediaStore.MediaColumns.SIZE},null,null,null)){
+            if(c!=null&&c.moveToFirst())return c.getLong(0);
+        }catch(Exception ignored){}
+        return -1;
+    }
     public synchronized String beginImage(String reportId,String reportName,String photoId,
                                           String extension,long size) {
         lastError="";
@@ -136,10 +145,7 @@ public final class PhotoArchive {
             String name=pictureName(photoId,extension);
             Uri existing=search(images,name,Environment.DIRECTORY_PICTURES+"/SERS Photo/");
             if(existing!=null){
-                try(Cursor c=resolver.query(existing,
-                    new String[]{MediaStore.MediaColumns.SIZE},null,null,null)){
-                    if(c!=null&&c.moveToFirst()&&c.getLong(0)==size&&size>0)return "EXISTS";
-                }
+                if(actualSize(existing)==size&&size>0)return "EXISTS";
                 return "ERROR:Existe otra copia con distinto tamaño; se mantiene sin sobrescribir.";
             }
             ContentValues values=new ContentValues();
@@ -290,9 +296,7 @@ public final class PhotoArchive {
     public synchronized long imageSize(String filename){
         Uri u=search(images,filename,Environment.DIRECTORY_PICTURES+"/SERS Photo/");
         if(u==null)return -1;
-        try(Cursor c=resolver.query(u,new String[]{MediaStore.MediaColumns.SIZE},null,null,null)){
-            return c!=null&&c.moveToFirst()?c.getLong(0):-1;
-        }catch(Exception ignored){return -1;}
+        return actualSize(u);
     }
     public synchronized String readImageChunk(String filename,long offset,int maxBytes){
         if(!filename.startsWith("SERS_")||!filename.matches("[A-Za-z0-9_.-]+"))
