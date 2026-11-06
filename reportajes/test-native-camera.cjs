@@ -142,12 +142,18 @@ const ctx={
  await db.saveReport(other);
  // Simular selección de otro reportaje por la interfaz, sin perder el borrador.
  await els.navHome.click();
- // La lista no se ha recargado con el reportaje creado manualmente.
- // Para seleccionarlo como usuario, generamos la fila tras volver al inicio.
  const original=reports.find(x=>x.id===origin);
  assert.ok(original);
- await els.reportSearch.listeners.input?.();
- // Guardar con la foto pendiente debe elegir su reportId, no el último activo.
+ // Forzar una recarga que incorpore el otro reportaje a la lista.
+ await els.actionToggleClosed.click();
+ const otherRow=els.reportsList.children.find(row=>
+  row.children?.[1]?.children?.[0]?.textContent==='Otro reportaje');
+ assert.ok(otherRow,'el otro reportaje debe estar visible en la lista');
+ await otherRow.click();
+ assert.equal(els.selectedReportName.textContent,'Otro reportaje');
+ // El usuario cambió el reportaje activo mientras la fotografía anterior
+ // seguía pendiente. Se debe guardar en el reportaje de la toma.
+
  els.photoDescription.value='Quinto elemento fotografiado';
  els.photoDescription.listeners.input();
  await new Promise(res=>setTimeout(res,600));
