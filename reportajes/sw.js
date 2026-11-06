@@ -1,5 +1,5 @@
 'use strict';
-const CACHE='sers-photo-v7';
+const CACHE='sers-photo-v8';
 const ASSETS=['./','./index.html','./styles.css','./db.js','./app.js',
  './cloud.js','./import.js','./vault.js','./leaflet.css','./manifest.webmanifest','../zip.js',
  '../icons/icon-192.png','../icons/icon-512.png'];
