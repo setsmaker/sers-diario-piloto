@@ -81,24 +81,24 @@ jobs:
       - name: Preparar APK con nombre de instalación
         run: |
           mkdir -p dist
-          cp android-reportajes/app/build/outputs/apk/debug/app-debug.apk dist/SERS_Photo_Seguro_v8.apk
-          test -s dist/SERS_Photo_Seguro_v8.apk
+          cp android-reportajes/app/build/outputs/apk/debug/app-debug.apk dist/SERS_Photo_Seguro_v9.apk
+          test -s dist/SERS_Photo_Seguro_v9.apk
       - name: Adjuntar APK a GitHub Actions
         uses: actions/upload-artifact@v4
         with:
           name: SERS-Reportajes-APK
-          path: dist/SERS_Photo_Seguro_v8.apk
+          path: dist/SERS_Photo_Seguro_v9.apk
       - name: Publicar APK de prueba en GitHub Releases
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          TAG="sers-photo-seguro-v8"
+          TAG="sers-photo-seguro-v9"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/SERS_Photo_Seguro_v8.apk --clobber
+            gh release upload "$TAG" dist/SERS_Photo_Seguro_v9.apk --clobber
           else
-            gh release create "$TAG" dist/SERS_Photo_Seguro_v8.apk \
-              --title "SERS Photo Seguro · APK de prueba v8" \
-              --notes "SERS Photo Seguro v8: copia nativa de fotografías originales en Galería e historiales JSON externos en Descargas, recuperación de reportajes a partir de backups, GPS, brújula y dictado. Captura, GPS, brújula, dictado, galería, mapa y exportación ZIP. APK de prueba; se recomienda no usar con información confidencial hasta validar seguridad y sincronización."
+            gh release create "$TAG" dist/SERS_Photo_Seguro_v9.apk \
+              --title "SERS Photo Seguro · APK de prueba v9" \
+              --notes "SERS Photo Seguro v9: copia nativa de fotografías originales en Galería e historiales JSON externos en Descargas, recuperación de reportajes a partir de backups, GPS, brújula y dictado. Cámara Xiaomi con FileProvider y doble guardado en Galería, descripción, GPS, brújula, dictado y ZIP. APK de prueba; se recomienda no usar con información confidencial hasta validar seguridad y sincronización."
           fi
