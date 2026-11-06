@@ -501,28 +501,46 @@
   try{
    await stopDictation();
    draft.description=$('photoDescription').value;
-   await saveDraftNow();await draftQueue;
+   await archivePromise.catch(()=>{});
+   if(SersVault.available()&&!draft.archivedName){
+    archiveError=null;
+    await copyDraftToGallery(draft); // Reintentar sin descartar la foto.
+   }
+   if(SersVault.available()&&!draft.archivedName)
+    throw new Error('La fotografía aún no está protegida en la galería.');
+   await saveDraftNow();
+   await draftQueue; // Incluye el JSON externo y su confirmación.
    const r=await ReportDB.getReport(activeId);
-   if(!r)throw new Error('El reportaje ya no existe');
-   const sequence=(await ReportDB.photosByReport(activeId)).reduce((max,p)=>Math.max(max,p.sequence||0),0)+1;
+   if(!r)throw new Error('El reportaje ya no existe.');
+   const sequence=draft.sequence||
+    (await ReportDB.photosByReport(activeId)).reduce((max,p)=>Math.max(max,p.sequence||0),0)+1;
+   const already=await ReportDB.getPhoto(draft.photoId);
    const item={
-    id:uid(),reportId:activeId,sequence,file:draft.file,originalName:draft.originalName,
+    id:draft.photoId,reportId:activeId,sequence,file:draft.file,
+    originalName:draft.originalName,archivedName:draft.archivedName||null,
     mime:draft.file.type,size:draft.file.size,source:draft.source,
-    capturedAt:draft.capturedAt,addedAt:now(),updatedAt:now(),
+    capturedAt:draft.capturedAt,addedAt:draft.selectedAt||now(),updatedAt:now(),
     description:draft.description||'',position:draft.position,orientation:draft.orientation
    };
+   // Primero archivar los metadatos definitivos fuera de WebView.
+   if(SersVault.available())await SersVault.writePhoto(item,r);
    await ReportDB.savePhoto(item);
-   r.photoCount=(r.photoCount||0)+1;r.closedAt=null;
-   await ReportDB.saveReport({...r,updatedAt:now()});
+   r.photoCount=(await ReportDB.photosByReport(activeId)).length;
+   r.closedAt=null;r.updatedAt=now();
+   if(SersVault.available())await SersVault.writeReport(r);
+   await ReportDB.saveReport(r);
    await ReportDB.clearDraft();
    draft=null;photos=await ReportDB.photosByReport(activeId);
    await reload();
    $('capCounter').textContent='Fotografía '+labelNum((r.photoCount||0)+1);
    renderDraft();
-   window.dispatchEvent(new CustomEvent('sers-reportajes:saved',{detail:{id:item.id,reportId:activeId}}));
-   message('Foto '+labelNum(sequence)+' guardada. Puedes hacer la siguiente.');
+   window.dispatchEvent(new CustomEvent('sers-reportajes:saved',{
+    detail:{id:item.id,reportId:activeId}}));
+   message('✓ Foto '+labelNum(sequence)+' guardada en Galería y ficha de datos.');
   }catch(e){
-   console.error(e);message('No se pudo guardar la foto. No cierres el borrador.');
+   console.error('Error protegiendo la foto',e);
+   archiveStatus('⚠ NO GUARDADA COMPLETAMENTE: '+String(e.message||e),'error');
+   message('No se ha completado el guardado. La foto pendiente sigue disponible.');
   }finally{$('saveAndNext').disabled=false;}
  }
  function clearCardUrls(){
@@ -584,8 +602,13 @@
   if(!p)return false;
   const newText=$('dialogDescription').value;
   if(p.description===newText)return true;
-  await ReportDB.savePhoto({...p,description:newText,updatedAt:now()});
+  const changed={...p,description:newText,updatedAt:now()};
   const report=await ReportDB.getReport(p.reportId);
+  if(SersVault.available()){
+   if(!changed.archivedName)changed.archivedName=await SersVault.archiveFile(changed.file,report,changed.id);
+   await SersVault.writePhoto(changed,report);
+  }
+  await ReportDB.savePhoto(changed);
   if(report)await ReportDB.saveReport({...report,updatedAt:now()});
   await reload();
   window.dispatchEvent(new CustomEvent('sers-reportajes:saved',{detail:{id:p.id,reportId:p.reportId}}));
@@ -615,8 +638,9 @@
  }
  async function deletePhoto(){
   const p=photos.find(x=>x.id===dialogPhotoId);
-  if(!p||!confirm('¿Eliminar definitivamente esta fotografía y su descripción de este móvil?'))return;
+  if(!p||!confirm('¿Quitar esta fotografía de la aplicación? La copia en Galería y su ficha JSON permanecerán para poder recuperarla.'))return;
   try{
+   // Las copias de seguridad de Galería y Descargas se conservan.
    await ReportDB.deletePhoto(p.id);
    const report=await ReportDB.getReport(p.reportId);
    if(report)await ReportDB.saveReport({...report,photoCount:Math.max(0,(report.photoCount||1)-1),updatedAt:now()});
