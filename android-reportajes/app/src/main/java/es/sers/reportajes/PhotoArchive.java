@@ -102,9 +102,17 @@ public final class PhotoArchive {
                 done.put(MediaStore.MediaColumns.IS_PENDING,0);
                 if(resolver.update(uri,done,null,null)<1)
                     throw new Exception("La cámara no confirmó la foto.");
-                try(Cursor c=resolver.query(uri,new String[]{MediaStore.MediaColumns.SIZE},null,null,null)){
-                    if(c==null||!c.moveToFirst()||c.getLong(0)<1)
-                        throw new Exception("La cámara devolvió un archivo vacío.");
+                // La columna SIZE de MediaStore puede tardar en actualizarse.
+                // Verificar el archivo real, sin depender de su indexación.
+                long size=-1;
+                try(android.os.ParcelFileDescriptor fd=resolver.openFileDescriptor(uri,"r")){
+                    if(fd!=null)size=fd.getStatSize();
+                }
+                if(size==0)throw new Exception("La cámara devolvió un archivo vacío.");
+                if(size<0){
+                    try(InputStream in=resolver.openInputStream(uri)){
+                        if(in==null||in.read()==-1)throw new Exception("Fotografía vacía.");
+                    }
                 }
                 return true;
             }
