@@ -400,7 +400,10 @@
   const parent=await ReportDB.getReport(target.reportId);
   if(!parent)throw new Error('No existe el reportaje para archivar la foto.');
   archiveStatus('Guardando fotografía original en la galería…','checking');
-  const name=await SersVault.archiveFile(target.file,parent,target.photoId);
+  // La cámara nativa ya ha escrito el original directamente en Galería.
+  // Sólo copiar bytes cuando procede del selector de imágenes.
+  const name=target.archivedName||
+   await SersVault.archiveFile(target.file,parent,target.photoId);
   // No sustituir el borrador de otra fotografía.
   if(!draft||draft.photoId!==target.photoId)return;
   draft.archivedName=name;
@@ -408,8 +411,9 @@
   await saveDraftNow();
   archiveStatus('✓ Copia guardada en Galería y ficha JSON en Descargas','success');
  }
- async function photoSelected(event,source){
-  const file=event.target.files?.[0];event.target.value='';
+ async function photoSelected(event,source,native=null){
+  const file=native?.file||event?.target?.files?.[0];
+  if(event?.target)event.target.value='';
   if(!file)return;
   if(!file.type.startsWith('image/')){message('Selecciona un archivo de imagen.');return;}
   stopDictation();
@@ -423,9 +427,11 @@
      method:cameraStart.orientation.method+'-antes-de-camara'};
   }
   const seq=(await ReportDB.photosByReport(activeId)).reduce((m,p)=>Math.max(m,p.sequence||0),0)+1;
-  const photoId=source==='camera'&&cameraStart?.photoId?cameraStart.photoId:uid();
+  const photoId=native?.photoId||(source==='camera'&&cameraStart?.photoId?
+   cameraStart.photoId:uid());
   draft={id:'capture',reportId:activeId,photoId,sequence:seq,
    file,originalName:file.name,description:'',source,
+   archivedName:native?.archivedName||null,
    capturedAt:captureTime,selectedAt:now(),position,orientation:orientationValue};
   cameraStart=null;
   renderDraft();
@@ -1175,6 +1181,13 @@
   if(draft?.file&&!confirm('¿Repetir foto? La toma anterior seguirá en Galería si ya se ha guardado.'))return;
   cameraStart={position:gpsSnapshot(),orientation:headingSnapshot(),at:now(),
    photoId:uid()};
+  if(window.SersAndroid?.startPhotoCamera){
+   if(!window.SersAndroid.startPhotoCamera(r.id,r.name,cameraStart.photoId)){
+    message('No se puede iniciar la cámara.');return;
+   }
+   return;
+  }
+  // Sólo la versión web utiliza el selector HTML.
   if(window.SersAndroid?.prepareCameraArchive){
    if(!window.SersAndroid.prepareCameraArchive(r.id,r.name,cameraStart.photoId)){
     message('No se puede preparar la fotografía en la galería.');return;
@@ -1182,6 +1195,36 @@
   }
   $('cameraInput').click();
  }
+ // En Android, la cámara devuelve su identificador nativo, no un
+ // resultado del input HTML (algunos modelos Xiaomi no lo entregan).
+ window.addEventListener('sers-native-photo',async event=>{
+  const data=event.detail||{};
+  if(!data.photoId||!data.archivedName){
+   message('La cámara no ha devuelto una fotografía válida.');return;
+  }
+  if(cameraStart?.photoId!==data.photoId){
+   message('Fotografía guardada en Galería; vuelve al reportaje para recuperarla.');
+   return;
+  }
+  archiveStatus('Leyendo fotografía de la Galería…','checking');
+  try{
+   const file=await SersVault.readPhoto({
+    archivedName:data.archivedName,originalName:data.archivedName,
+    mime:'image/jpeg',capturedAt:cameraStart.at
+   });
+   await photoSelected(null,'camera',{file,photoId:data.photoId,
+    archivedName:data.archivedName});
+  }catch(error){
+   console.error('No se pudo abrir la foto nativa',error);
+   message('La foto puede estar en Galería, pero no se pudo abrir: '+error.message);
+   archiveStatus('⚠ Revisar Galería: '+error.message,'error');
+  }
+ });
+ window.addEventListener('sers-native-photo-error',event=>{
+  const error=event.detail?.error||'No se pudo recibir la fotografía de Android.';
+  console.error('Error cámara nativa',error);
+  message(error);
+ });
  $('cameraButton').addEventListener('click',launchCamera);
  $('replacePhoto').addEventListener('click',launchCamera);
  $('galleryPick').addEventListener('click',()=>$('galleryInput').click());
