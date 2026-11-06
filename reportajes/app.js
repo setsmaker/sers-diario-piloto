@@ -15,6 +15,7 @@
  let mapSource=localStorage.getItem(MAP_SOURCE_KEY)||'pnoa';
  let leafletLoadPromise=null;
  let archivePromise=Promise.resolve(),archiveError=null,archiveProbeDone=false;
+ let captureOpenEpoch=0;
  const doc=(tag,cls,text)=>{
   const el=document.createElement(tag);
   if(cls)el.className=cls;
@@ -304,20 +305,34 @@
  }
  async function openCapture(){
   const r=active();if(!r)return;
+  const epoch=++captureOpenEpoch;
+  const reportId=r.id;
   $('capTitle').textContent=r.name;
   $('capCounter').textContent='Fotografía '+labelNum((r.photoCount||0)+1);
   startGPS();enableCompass();updateSensors();
   try{
    const saved=await ReportDB.getDraft();
-   draft=saved?.file&&saved.reportId===r.id?saved:null;
+   // Una lectura anterior no puede borrar el borrador de una foto que
+   // llegó de la cámara mientras IndexedDB estaba respondiendo.
+   if(epoch!==captureOpenEpoch||currentView!=='capture'||activeId!==reportId)return;
+   if(draft?.file){
+    renderDraft();
+    return;
+   }
+   draft=saved?.file&&saved.reportId===reportId?saved:null;
    renderDraft();
    if(draft?.file&&SersVault.available()&&!draft.archivedName){
     archivePromise=copyDraftToGallery(draft).catch(e=>{
      archiveStatus('⚠ No se pudo recuperar la copia: '+e.message,'error');
     });
    }
-   if(saved?.file&&saved.reportId!==r.id)message('Hay una fotografía pendiente en otro reportaje.');
-  }catch(e){console.error(e);draft=null;renderDraft();}
+   if(saved?.file&&saved.reportId!==reportId)
+    message('Hay una fotografía pendiente en otro reportaje.');
+  }catch(e){
+   console.error('No se pudo cargar el borrador',e);
+   // No eliminar la fotografía actual si IndexedDB falla.
+   if(!draft?.file)message('No se pudo consultar el borrador; no se borrarán fotografías.');
+  }
  }
  function updatePhotoLocationInfo(){
   const note=$('photoLocationInfo');if(!note)return;
@@ -426,10 +441,13 @@
    if(!orientationValue&&cameraStart.orientation)orientationValue={...cameraStart.orientation,
      method:cameraStart.orientation.method+'-antes-de-camara'};
   }
-  const seq=(await ReportDB.photosByReport(activeId)).reduce((m,p)=>Math.max(m,p.sequence||0),0)+1;
+  const reportId=source==='camera'&&cameraStart?.reportId?
+   cameraStart.reportId:activeId;
+  const seq=(await ReportDB.photosByReport(reportId)).reduce((m,p)=>
+   Math.max(m,p.sequence||0),0)+1;
   const photoId=native?.photoId||(source==='camera'&&cameraStart?.photoId?
    cameraStart.photoId:uid());
-  draft={id:'capture',reportId:activeId,photoId,sequence:seq,
+  draft={id:'capture',reportId,photoId,sequence:seq,
    file,originalName:file.name,description:'',source,
    archivedName:native?.archivedName||null,
    capturedAt:captureTime,selectedAt:now(),position,orientation:orientationValue};
@@ -1238,7 +1256,7 @@
   if(!r){message('Selecciona primero un reportaje.');return;}
   if(draft?.file&&!confirm('¿Repetir foto? La toma anterior seguirá en Galería si ya se ha guardado.'))return;
   cameraStart={position:gpsSnapshot(),orientation:headingSnapshot(),at:now(),
-   photoId:uid()};
+   reportId:r.id,photoId:uid()};
   if(window.SersAndroid?.startPhotoCamera){
    if(!window.SersAndroid.startPhotoCamera(r.id,r.name,cameraStart.photoId)){
     message('No se puede iniciar la cámara.');return;
