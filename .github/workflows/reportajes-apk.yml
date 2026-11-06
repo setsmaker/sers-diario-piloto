@@ -40,7 +40,7 @@ jobs:
           ASSETS="android-reportajes/app/src/main/assets/web"
           mkdir -p "$ASSETS/reportajes" "$ASSETS/icons" android-reportajes/app/src/main/res/drawable-nodpi
           cp reportajes/index.html reportajes/styles.css reportajes/leaflet.css reportajes/db.js reportajes/app.js \
-            reportajes/cloud.js reportajes/import.js reportajes/sw.js reportajes/manifest.webmanifest "$ASSETS/reportajes/"
+            reportajes/cloud.js reportajes/import.js reportajes/vault.js reportajes/sw.js reportajes/manifest.webmanifest "$ASSETS/reportajes/"
           # Cargar Leaflet desde el propio APK: evita fallos de CDN y funciona
           # incluso sin conexión, aunque los mapas raster sí requieren Internet.
           curl -fLsS --retry 3 --connect-timeout 20 --max-time 120 \
@@ -71,24 +71,24 @@ jobs:
       - name: Preparar APK con nombre de instalación
         run: |
           mkdir -p dist
-          cp android-reportajes/app/build/outputs/apk/debug/app-debug.apk dist/SERS_Photo_v6.apk
-          test -s dist/SERS_Photo_v6.apk
+          cp android-reportajes/app/build/outputs/apk/debug/app-debug.apk dist/SERS_Photo_Seguro_v7.apk
+          test -s dist/SERS_Photo_Seguro_v7.apk
       - name: Adjuntar APK a GitHub Actions
         uses: actions/upload-artifact@v4
         with:
           name: SERS-Reportajes-APK
-          path: dist/SERS_Photo_v6.apk
+          path: dist/SERS_Photo_Seguro_v7.apk
       - name: Publicar APK de prueba en GitHub Releases
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          TAG="sers-photo-v6"
+          TAG="sers-photo-seguro-v7"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/SERS_Photo_v6.apk --clobber
+            gh release upload "$TAG" dist/SERS_Photo_Seguro_v7.apk --clobber
           else
-            gh release create "$TAG" dist/SERS_Photo_v6.apk \
-              --title "SERS Reportajes · APK de prueba v6" \
-              --notes "SERS Photo v6: selección y borrado de reportajes, galería mejorada, mapa con fotos agrupadas y OneDrive mediante compartir Android. Captura, GPS, brújula, dictado, galería, mapa y exportación ZIP. APK de prueba; se recomienda no usar con información confidencial hasta validar seguridad y sincronización."
+            gh release create "$TAG" dist/SERS_Photo_Seguro_v7.apk \
+              --title "SERS Photo Seguro · APK de prueba v7" \
+              --notes "SERS Photo Seguro v7: copia nativa de fotografías originales en Galería e historiales JSON externos en Descargas, recuperación de reportajes a partir de backups, GPS, brújula y dictado. Captura, GPS, brújula, dictado, galería, mapa y exportación ZIP. APK de prueba; se recomienda no usar con información confidencial hasta validar seguridad y sincronización."
           fi
