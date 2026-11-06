@@ -7,6 +7,7 @@ import android.content.ActivityNotFoundException;
 import android.content.ContentValues;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -39,6 +40,7 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 public class MainActivity extends Activity implements SensorEventListener {
@@ -70,6 +72,8 @@ public class MainActivity extends Activity implements SensorEventListener {
     private Uri nativePhotoUri;
     private String nativePhotoId;
     private boolean nativePhotoPending=false;
+    private File nativeCaptureFile;
+    private String nativeReportId,nativeReportName;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -209,23 +213,57 @@ public class MainActivity extends Activity implements SensorEventListener {
           null);
     }
 
+    private void emitNativePhotoResult(String id,String archivedName,String warning) {
+        if(web==null)return;
+        String payload="{photoId:"+org.json.JSONObject.quote(id)+
+            ",archivedName:"+(archivedName==null?"null":org.json.JSONObject.quote(archivedName))+
+            ",galleryError:"+(warning==null?"null":org.json.JSONObject.quote(warning))+"}";
+        web.evaluateJavascript(
+          "window.dispatchEvent(new CustomEvent('sers-native-photo',{detail:"+payload+"}));",null);
+    }
+
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == NATIVE_PHOTO_REQUEST) {
-            // Algunas cámaras Xiaomi devuelven RESULT_CANCELED aunque
-            // la foto ya esté correctamente escrita: comprobar archivo real.
-            String id=nativePhotoId;
-            Uri uri=nativePhotoUri;
-            nativePhotoPending=false;nativePhotoId=null;nativePhotoUri=null;
-            boolean valid=uri!=null && archive.finishCamera(uri,true);
-            // La actividad WebView puede estar reanudándose después
-            // de que Android cierre la cámara. Enviar el evento cuando
-            // haya terminado de volver al primer plano.
-            ui.postDelayed(()->{
-                if(valid)emitCameraResult("sers-native-photo",id,null);
-                else emitCameraResult("sers-native-photo-error",id,
-                    "La cámara no ha entregado una imagen válida. "+archive.error());
-            },180);
+            final String id=nativePhotoId;
+            final String reportId=nativeReportId;
+            final String reportName=nativeReportName;
+            final Uri returnedUri=data!=null?data.getData():null;
+            nativePhotoPending=false;
+            nativePhotoUri=null;nativePhotoId=null;nativeCaptureFile=null;
+            nativeReportId=null;nativeReportName=null;
+            // La cámara puede cerrar con RESULT_CANCELED incluso si ha
+            // escrito correctamente la fotografía. Evaluamos el archivo,
+            // nunca el resultado del fabricante, antes de descartar.
+            new Thread(()->{
+                String error=null,archived=null;
+                try{
+                    long size=archive.nativeCaptureSize(id);
+                    if(size<1024 && returnedUri!=null){
+                        String copied=archive.copyReturnedUriToCapture(returnedUri,id);
+                        if(copied.startsWith("ERROR:"))error=copied;
+                        size=archive.nativeCaptureSize(id);
+                    }
+                    if(size<1024)throw new IllegalStateException(
+                        "La cámara no escribió el archivo solicitado. "+
+                        (error==null?"":error));
+                    String published=archive.publishCameraFile(reportId,reportName,id);
+                    if(published.startsWith("ERROR:")){
+                        // Se preserva la imagen en el área privada persistente
+                        // aunque MediaStore no permita copiarla a Galería.
+                        error=published.substring("ERROR:".length());
+                    }else archived=published;
+                }catch(Exception failure){error=failure.getMessage();}
+                final String photoName=archived,warning=error;
+                ui.post(()->{
+                    if(archive.nativeCaptureSize(id)>=1024){
+                        emitNativePhotoResult(id,photoName,warning);
+                    }else{
+                        emitCameraResult("sers-native-photo-error",id,
+                            "No se ha recibido una fotografía completa: "+warning);
+                    }
+                });
+            },"sers-photo-archive").start();
             return;
         }
         if (requestCode == FILE_REQUEST) {
@@ -334,19 +372,34 @@ public class MainActivity extends Activity implements SensorEventListener {
                     return;
                 }
                 try{
-                    Uri output=archive.startCamera(reportId,reportName,photoId);
-                    if(output==null)throw new IllegalStateException(archive.error());
-                    nativePhotoUri=output;nativePhotoId=photoId;nativePhotoPending=true;
+                    // FileProvider sobre almacenamiento de la aplicación.
+                    // Evita el Content URI MediaStore que Xiaomi invalida.
+                    File capture=archive.prepareNativeCapture(photoId);
+                    Uri output=FileProvider.getUriForFile(MainActivity.this,
+                        getPackageName()+".fileprovider",capture);
+                    nativeCaptureFile=capture;nativePhotoUri=output;
+                    nativePhotoId=photoId;nativeReportId=reportId;
+                    nativeReportName=reportName;nativePhotoPending=true;
                     Intent intent=new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
                     intent.putExtra(MediaStore.EXTRA_OUTPUT,output);
                     intent.setClipData(ClipData.newUri(getContentResolver(),"SERS Photo",output));
-                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|
-                                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                    int flags=Intent.FLAG_GRANT_READ_URI_PERMISSION|
+                              Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+                    intent.addFlags(flags);
+                    // Con ciertas versiones de la cámara Xiaomi, conceder
+                    // el permiso por paquete mejora la escritura del archivo.
+                    List<ResolveInfo> cameras=getPackageManager().queryIntentActivities(intent,0);
+                    for(ResolveInfo cam:cameras){
+                        if(cam.activityInfo!=null)
+                            grantUriPermission(cam.activityInfo.packageName,output,flags);
+                    }
                     startActivityForResult(intent,NATIVE_PHOTO_REQUEST);
                 }catch(Exception error){
-                    Uri incomplete=nativePhotoUri;
-                    nativePhotoUri=null;nativePhotoId=null;nativePhotoPending=false;
-                    if(incomplete!=null)archive.finishCamera(incomplete,false);
+                    nativePhotoPending=false;
+                    // No borrar nunca un fichero capturado, aunque falle
+                    // la invocación o se cierre la actividad de la cámara.
+                    nativeCaptureFile=null;nativePhotoUri=null;nativePhotoId=null;
+                    nativeReportId=null;nativeReportName=null;
                     emitCameraResult("sers-native-photo-error",photoId,
                         "No se pudo abrir la cámara: "+error.getMessage());
                 }
