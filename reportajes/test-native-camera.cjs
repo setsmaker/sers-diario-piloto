@@ -133,5 +133,29 @@ const ctx={
  assert.ok(!els.captureFilled.classList.contains('hidden'),'vista previa tras fallo de Galería');
  assert.equal(seen.archiveFile,1,'debe reintentar salvar en Galería');
  assert.equal(draft.archivedName,'SERS_'+fallbackId+'.jpg');
- console.log('OK: foto nativa visible, descripción guardada, sin duplicados y recuperación tras fallo de Galería');
+ // Regresión del fallo real: el reportaje mostrado y el ID activo pueden
+ // diferir durante una recarga asíncrona. Debe ganar el ID de la fotografía.
+ const origin=draft.reportId;
+ const other={id:'otro-reportaje',name:'Otro reportaje',type:'reportaje',
+   createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),
+   closedAt:null,photoCount:0};
+ await db.saveReport(other);
+ // Simular selección de otro reportaje por la interfaz, sin perder el borrador.
+ await els.navHome.click();
+ // La lista no se ha recargado con el reportaje creado manualmente.
+ // Para seleccionarlo como usuario, generamos la fila tras volver al inicio.
+ const original=reports.find(x=>x.id===origin);
+ assert.ok(original);
+ await els.reportSearch.listeners.input?.();
+ // Guardar con la foto pendiente debe elegir su reportId, no el último activo.
+ els.photoDescription.value='Quinto elemento fotografiado';
+ els.photoDescription.listeners.input();
+ await new Promise(res=>setTimeout(res,600));
+ await els.saveAndNext.click();
+ const restored=photos.find(x=>x.id===fallbackId);
+ assert.ok(restored,'la foto pendiente debe guardarse sin descartarse');
+ assert.equal(restored.reportId,origin,'no se debe cambiar la obra asociada a la foto');
+ assert.equal(restored.description,'Quinto elemento fotografiado');
+ assert.equal(reports.find(x=>x.id===other.id).photoCount,0,'otro reportaje no debe recibirla');
+ console.log('OK: captura, dictado y guardado por ID de reportaje sin confundir reportajes');
 })().catch(error=>{console.error(error);process.exitCode=1;});
