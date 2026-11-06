@@ -14,6 +14,7 @@
  const MAP_SOURCE_KEY='sers-reportajes-map-source-v1';
  let mapSource=localStorage.getItem(MAP_SOURCE_KEY)||'pnoa';
  let leafletLoadPromise=null;
+ let archivePromise=Promise.resolve(),archiveError=null,archiveProbeDone=false;
  const doc=(tag,cls,text)=>{
   const el=document.createElement(tag);
   if(cls)el.className=cls;
@@ -66,7 +67,9 @@
   if(!reports.some(r=>r.id===selectedReportId))selectedReportId=reports[0]?.id||'';
  }
  async function saveReport(report){
-  report.updatedAt=now();await ReportDB.saveReport(report);
+  report.updatedAt=now();
+  if(SersVault.available())await SersVault.writeReport(report);
+  await ReportDB.saveReport(report);
   await reload();
  }
  const reportStat=id=>reportStats.get(id)||{count:0,missing:0};
@@ -138,8 +141,7 @@
   const r=selectedReport();if(!r)return;
   const st=reportStat(r.id);
   const label='«'+r.name+'» ('+st.count+' fotografías)';
-  if(!confirm('¿Eliminar DEFINITIVAMENTE el reportaje '+label+
-   ' y todas sus fotos de este móvil?\n\nNo se podrá deshacer. Puedes exportar ZIP antes.'))return;
+  if(!confirm('¿Quitar '+label+' de la aplicación?\n\nLas fotografías y sus fichas JSON permanecerán en la galería y en Descargas como copia de seguridad.'))return;
   try{
    if(draft?.reportId===r.id){await saveDraftNow();draft=null;setCaptureUrl(null);}
    await ReportDB.deleteReport(r.id);
@@ -156,6 +158,7 @@
   if(name.length<3){message('Escribe un nombre de reportaje de al menos 3 caracteres.');return;}
   const r={id:uid(),name,type:'reportaje',createdAt:now(),updatedAt:now(),closedAt:null,photoCount:0};
   try{
+   if(SersVault.available())await SersVault.writeReport(r);
    await ReportDB.saveReport(r);
    $('reportName').value='';
    await reload();
